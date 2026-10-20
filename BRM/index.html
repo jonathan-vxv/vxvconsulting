@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Leadership Dashboard | VXV Consulting</title>
+<style>
+  :root {
+    --bg: #faf9f5; --bg-alt: #f0eee6; --ink: #23221e; --ink-dim: #77746a;
+    --blue: #0071e3; --blue-dim: #0058b0; --line: #ddd9cc; --neg: #b3261e; --pos: #1e7a3c; --warn-bg: #fdecea;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.47; -webkit-font-smoothing: antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 24px; }
+  header { border-bottom: 1px solid var(--line); }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; height: 48px; }
+  .brand { font-weight: 600; font-size: .95rem; color: var(--ink); text-decoration: none; }
+  button { font: inherit; cursor: pointer; }
+  .btn { background: var(--blue); color: #fff; border: 0; border-radius: 980px; padding: 10px 20px; font-size: .95rem; }
+  .btn:hover { background: var(--blue-dim); }
+  .btn:disabled { opacity: .6; cursor: default; }
+  .link { background: none; border: 0; color: var(--blue); font-size: .8rem; padding: 0; }
+
+  #login { max-width: 360px; margin: 96px auto; padding: 0 24px; text-align: center; }
+  #login h1 { font-size: 1.8rem; letter-spacing: -.02em; margin: 0 0 8px; }
+  #login p { color: var(--ink-dim); margin: 0 0 24px; }
+  #login input { width: 100%; font: inherit; padding: 11px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; margin-bottom: 12px; }
+  #login input:focus { outline: 2px solid var(--blue); outline-offset: 1px; }
+  .err { color: var(--neg); font-size: .85rem; min-height: 1.3em; margin: 0 0 12px; }
+
+  #dash { display: none; padding: 40px 0 80px; }
+  .top { margin-bottom: 20px; }
+  .top h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); letter-spacing: -.02em; margin: 0 0 2px; }
+  .top .sub { color: var(--ink-dim); font-size: .95rem; }
+  .meta { color: var(--ink-dim); font-size: .8rem; display: flex; gap: 16px; align-items: center; margin-top: 6px; }
+  .banner { background: var(--warn-bg); color: var(--neg); border-radius: 12px; padding: 10px 16px; font-size: .85rem; font-weight: 600; margin-bottom: 28px; }
+
+  .sec { margin-bottom: 36px; }
+  .sec h2 { font-size: .78rem; font-weight: 600; letter-spacing: .06em; color: var(--ink-dim); margin: 0 0 12px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  .tile { background: var(--bg-alt); border-radius: 18px; padding: 18px 22px; }
+  .tile .l { font-size: .72rem; font-weight: 600; letter-spacing: .05em; color: var(--ink-dim); }
+  .tile .v { font-size: 1.9rem; font-weight: 700; letter-spacing: -.02em; margin: 2px 0; }
+  .tile .n { font-size: .8rem; color: var(--ink-dim); }
+  .tile svg { display: block; margin-top: 10px; }
+  .up { color: var(--pos); } .down { color: var(--neg); }
+
+  .card { background: var(--bg-alt); border-radius: 18px; padding: 8px 22px; }
+  .row { display: grid; grid-template-columns: minmax(120px, 190px) 1fr auto; gap: 16px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: .92rem; }
+  .row:last-child { border-bottom: 0; }
+  .row.head { font-size: .72rem; font-weight: 600; letter-spacing: .05em; color: var(--ink-dim); padding: 10px 0; }
+  .row.total { font-weight: 700; }
+  .bar { height: 12px; background: var(--blue); border-radius: 6px; min-width: 2px; }
+  .row .val { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  @media (max-width: 520px) { .row { grid-template-columns: 1fr auto; } .row .bar { grid-column: 1 / -1; order: 3; } }
+  .foot { color: var(--ink-dim); font-size: .75rem; text-align: center; }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <a class="brand" href="/">VXV Consulting</a>
+  <button class="link" id="logout" hidden>Sign out</button>
+</div></header>
+
+<main>
+  <form id="login" autocomplete="off">
+    <h1>Leadership dashboard</h1>
+    <p>Enter the access code Jonathan sent you.</p>
+    <input id="code" type="password" placeholder="Access code" autocomplete="current-password" required>
+    <div class="err" id="err" role="alert"></div>
+    <button class="btn" id="go" type="submit">View dashboard</button>
+  </form>
+
+  <div id="dash"><div class="wrap">
+    <div class="top">
+      <h1 id="title"></h1>
+      <div class="sub" id="sub"></div>
+      <div class="meta"><span id="updated"></span><button class="link" id="refresh">Refresh</button></div>
+    </div>
+    <div class="banner" id="banner" hidden></div>
+    <div id="sections"></div>
+    <p class="foot">Figures update from the live financial workbook maintained by VXV Consulting.</p>
+  </div></div>
+</main>
+
+<script>
+const API = 'https://vxv-dashboard-api.jonathan-c6b.workers.dev/api/dashboard';
+const DEMO = new URLSearchParams(location.search).has('demo');
+
+const $ = (id) => document.getElementById(id);
+const store = { get: () => { try { return sessionStorage.getItem('vxv_code'); } catch { return null; } },
+                set: (v) => { try { v ? sessionStorage.setItem('vxv_code', v) : sessionStorage.removeItem('vxv_code'); } catch {} } };
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+// Fake grid in the same shape the API returns for the Dashboard tab (A1:H..).
+const R = (b = '', c = '', d = '', e = '', f = '', g = '', h = '') => ['', b, c, d, e, f, g, h];
+const DEMO_DATA = { fetchedAt: new Date().toISOString(), grid: [
+  R('Bozeman Radon & Mold'), R('Leadership dashboard  ·  Books through September 2026  ·  Cash as of Oct 20'), R('SAMPLE DATA — not real numbers'), R(),
+  R('CASH POSITION'),
+  R('AVAILABLE CASH', '', 'PAYROLLS COVERED', '', 'CREDIT CARD BALANCE', '', 'JOBBER LOAN REMAINING'),
+  R('$33,379', '', '2.4 runs', '', '-', '', '$73,739'),
+  R('Relay + Bank of Bozeman, minus Bill card', '', 'Avg run $14,182', '', 'Bill card — amount owed', '', 'Paid down $17,951 since Aug 31'), R(),
+  R('PROFITABILITY  ·  LAST 6 MONTHS (APR–SEP 2026)'),
+  R('REVENUE', '', 'GROSS PROFIT', '', 'GROSS MARGIN', '', 'AVG PAYROLL RUN'),
+  R('$550,168', '', '$263,890', '', '48.0%', '', '$14,182'),
+  R('▲ 3.3%  vs same period last year', '', '▲ 3.5%  vs last year', '', '▲ 0.1 pts  vs last year', '', 'Latest $16,312 on Oct 16'),
+  R('▆▇█▂▁▂▃▅▅▇▇▇', '', '', '', '▅▇▂▇▁▁█▅▂▁▅▆'), R(),
+  R('REVENUE BY SERVICE  ·  SEPTEMBER 2026'),
+  R('CATEGORY', '', '', '', '', '', 'THIS MONTH  ·  vs LAST YEAR'),
+  R('Radon Mitigation', '', '██████████████████████████████', '', '', '', '$38,991   ▲ 6%'),
+  R('Radon Testing', '', '█████████', '', '', '', '$11,821   ▲ 17%'),
+  R('Mold Remediation', '', '█████████████████████████', '', '', '', '$32,611   ▲ 8%'),
+  R('Mold Testing & Inspection', '', '█████', '', '', '', '$6,614   ▲ 20%'),
+  R('Misc', '', '███████', '', '', '', '$9,197   ▼ 2%'),
+  R('Total', '', '', '', '', '', '$99,834   ▲ 9%'),
+  R('Trends, charts and the full numbers are on the Detail tab.'),
+] };
+
+// ---- Parse the Dashboard tab layout into sections of tiles / a bar table ----
+const COLS = [1, 3, 5, 7];                       // B, D, F, H hold the four tile columns
+const SPARK = '▁▂▃▄▅▆▇█';
+const isLabel = (v) => { const s = v.replace(/\bvs\b/g, ''); return /[A-Z]{3}/.test(s) && s === s.toUpperCase(); };
+
+function parse(grid) {
+  const out = { title: '', sub: '', banner: '', sections: [] };
+  let sec = null, mode = null, stage = 0;
+  for (const raw of grid) {
+    const r = Array.from({ length: 8 }, (_, i) => String(raw[i] ?? '').trim());
+    if (!r.some(Boolean)) continue;
+    const onlyB = r[1] && r.every((v, i) => i === 1 || !v);
+    if (onlyB) {
+      const b = r[1];
+      if (/sample data/i.test(b) && !sec) out.banner = b;
+      else if (!sec && !out.title) out.title = b;
+      else if (!sec && !out.sub) out.sub = b;
+      else if (/[A-Z]{3}/.test(b) && b === b.toUpperCase()) { sec = { head: b, tiles: [], rows: null, rowHead: null }; out.sections.push(sec); mode = null; }
+      continue;                                  // anything else (footnotes about other tabs) is internal, not shown
+    }
+    if (!sec) continue;
+    const cs = COLS.map((c) => r[c]);
+    if (mode !== 'table' && cs.filter(Boolean).length && cs.filter(Boolean).every(isLabel)) {
+      if (cs[0] && cs[3] && !cs[1] && !cs[2]) { mode = 'table'; sec.rowHead = [cs[0], cs[3]]; sec.rows = []; }
+      else { mode = 'tiles'; stage = 0; sec.tiles = cs.map((l) => (l ? { label: l, value: '', note: '', spark: '' } : null)); }
+      continue;
+    }
+    if (mode === 'table') { sec.rows.push({ name: cs[0], bar: String(raw[3] ?? ''), value: cs[3] }); continue; }
+    if (mode === 'tiles') {
+      if (cs.some((v) => v && [...v].every((ch) => SPARK.includes(ch)))) cs.forEach((v, i) => { if (v && sec.tiles[i]) sec.tiles[i].spark = v; });
+      else { cs.forEach((v, i) => { if (sec.tiles[i]) sec.tiles[i][stage === 0 ? 'value' : 'note'] = v; }); stage++; }
+    }
+  }
+  return out;
+}
+
+// Color ▲ green / ▼ red inside a string.
+function trendText(parent, s) {
+  s.split(/([▲▼][^\s]*(?:\s+[\d.]+\s*(?:pts|%)?)?)/).forEach((part) => {
+    if (!part) return;
+    if (part[0] === '▲' || part[0] === '▼') parent.append(el('span', part[0] === '▲' ? 'up' : 'down', part));
+    else parent.append(part);
+  });
+}
+
+function sparkline(chars) {
+  const vals = [...chars].map((c) => SPARK.indexOf(c) + 1), n = vals.length, w = 9, gap = 3, H = 28;
+  const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${n * (w + gap)} ${H}`); svg.setAttribute('width', n * (w + gap)); svg.setAttribute('height', H);
+  svg.setAttribute('aria-hidden', 'true');
+  vals.forEach((v, i) => {
+    const h = Math.max(3, (v / 8) * H), r = document.createElementNS(ns, 'rect');
+    r.setAttribute('x', i * (w + gap)); r.setAttribute('y', H - h); r.setAttribute('width', w); r.setAttribute('height', h);
+    r.setAttribute('rx', 2); r.setAttribute('fill', i === n - 1 ? 'var(--blue)' : '#b8b3a1'); svg.append(r);
+  });
+  return svg;
+}
+
+function render(d) {
+  const p = parse(d.grid || []);
+  $('title').textContent = p.title || 'Dashboard';
+  $('sub').textContent = p.sub;
+  $('banner').hidden = !p.banner; $('banner').textContent = p.banner;
+  $('updated').textContent = 'Updated ' + new Date(d.fetchedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  const box = $('sections'); box.replaceChildren();
+  p.sections.forEach((s) => {
+    const sec = el('section', 'sec'); sec.append(el('h2', '', s.head));
+    const tiles = s.tiles.filter(Boolean);
+    if (tiles.length) {
+      const g = el('div', 'tiles');
+      tiles.forEach((t) => {
+        const tile = el('div', 'tile'); tile.append(el('div', 'l', t.label), el('div', 'v', t.value));
+        const n = el('div', 'n'); trendText(n, t.note); tile.append(n);
+        if (t.spark) tile.append(sparkline(t.spark));
+        g.append(tile);
+      });
+      sec.append(g);
+    }
+    if (s.rows && s.rows.length) {
+      const max = Math.max(1, ...s.rows.map((r) => [...r.bar].length));
+      const card = el('div', 'card'), head = el('div', 'row head');
+      head.append(el('span', '', s.rowHead[0]), el('span'), el('span', 'val', s.rowHead[1])); card.append(head);
+      s.rows.forEach((r) => {
+        const row = el('div', 'row' + (/^total$/i.test(r.name) ? ' total' : '')), bar = el('div');
+        const len = [...r.bar].length;
+        if (len) { const b = el('div', 'bar'); b.style.width = (len / max) * 100 + '%'; bar.append(b); }
+        const v = el('span', 'val'); trendText(v, r.value);
+        row.append(el('span', '', r.name), bar, v); card.append(row);
+      });
+      sec.append(card);
+    }
+    box.append(sec);
+  });
+  $('login').style.display = 'none'; $('dash').style.display = 'block'; $('logout').hidden = false;
+}
+
+async function load(code) {
+  if (DEMO) return DEMO_DATA;
+  const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
+  if (res.status === 401) throw new Error('That access code was not recognized.');
+  if (!res.ok) throw new Error('Could not load the dashboard right now. Please try again shortly.');
+  return res.json();
+}
+
+async function show(code, fromLogin) {
+  try { render(await load(code)); store.set(code); }
+  catch (e) { store.set(null); if (fromLogin) $('err').textContent = e.message; else signOut(); }
+}
+
+function signOut() {
+  store.set(null); $('dash').style.display = 'none'; $('login').style.display = 'block';
+  $('logout').hidden = true; $('code').value = ''; $('err').textContent = '';
+}
+
+$('login').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('err').textContent = ''; $('go').disabled = true;
+  await show($('code').value.trim(), true); $('go').disabled = false;
+});
+$('refresh').addEventListener('click', () => { const c = store.get(); if (c || DEMO) show(c, false); });
+$('logout').addEventListener('click', signOut);
+setInterval(() => { const c = store.get(); if (c && !document.hidden) show(c, false); }, 5 * 60 * 1000);
+if (DEMO) show('demo', true); else if (store.get()) show(store.get(), false);
+</script>
+</body>
+</html>
