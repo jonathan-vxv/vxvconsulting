@@ -45,7 +45,9 @@
   .tile .l { font-size: .72rem; font-weight: 600; letter-spacing: .05em; color: var(--ink-dim); }
   .tile .v { font-size: 1.9rem; font-weight: 700; letter-spacing: -.02em; margin: 2px 0; }
   .tile .n { font-size: .8rem; color: var(--ink-dim); }
-  .tile svg { display: block; margin-top: 10px; }
+  .tile { display: flex; flex-direction: column; }
+  .tile .n { margin-bottom: 12px; }
+  .tile svg { display: block; width: 100%; height: auto; margin: auto auto 0; }   /* shrinks to fit the tile, centered, pinned to the bottom */
   .up { color: var(--pos); } .down { color: var(--neg); }
   .tile svg .hit { cursor: default; }
   #tip { position: fixed; z-index: 30; pointer-events: none; background: var(--ink); color: #fff; font-size: .78rem; line-height: 1.3;
@@ -204,7 +206,7 @@ function sparkline(chars, pts) {
   const vals = real ? pts.map((p) => p.value) : [...chars].map((c) => SPARK.indexOf(c) + 1);
   const n = vals.length, w = real ? 14 : 9, gap = real ? 4 : 3, H = real ? 44 : 28, top = Math.max(...vals.map(Math.abs), 1e-9);
   const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg'), mk = (t) => document.createElementNS(ns, t);
-  svg.setAttribute('viewBox', `0 0 ${n * (w + gap)} ${H}`); svg.setAttribute('width', n * (w + gap)); svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', `0 0 ${n * (w + gap)} ${H}`); svg.style.maxWidth = n * (w + gap) + 'px';
   if (!real) svg.setAttribute('aria-hidden', 'true');
   vals.forEach((v, i) => {
     const h = Math.max(3, (Math.abs(v) / (real ? top : 8)) * H), r = mk('rect'), base = i === n - 1 ? 'var(--blue)' : '#b8b3a1';
