@@ -47,6 +47,10 @@
   .tile .n { font-size: .8rem; color: var(--ink-dim); }
   .tile svg { display: block; margin-top: 10px; }
   .up { color: var(--pos); } .down { color: var(--neg); }
+  .tile svg .hit { cursor: default; }
+  #tip { position: fixed; z-index: 30; pointer-events: none; background: var(--ink); color: #fff; font-size: .78rem; line-height: 1.3;
+    padding: 6px 10px; border-radius: 8px; white-space: nowrap; transform: translate(-50%, -100%); display: none; }
+  #tip b { font-weight: 700; }
 
   .card { background: var(--bg-alt); border-radius: 18px; padding: 8px 22px; }
   .row { display: grid; grid-template-columns: minmax(120px, 190px) 1fr auto; gap: 16px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: .92rem; }
@@ -117,6 +121,13 @@ const DEMO_DATA = { fetchedAt: new Date().toISOString(), grid: [
   R('Misc', '', '███████', '', '', '', '$9,197   ▼ 2%'),
   R('Total', '', '', '', '', '', '$99,834   ▲ 9%'),
   R('Trends, charts and the full numbers are on the Detail tab.'),
+], calc: [   // Calc tab rows: Month, P&L col, Revenue, COGS, Gross Profit, GP %
+  ['Oct 2025', '14', '$55,610', '$28,993', '$26,618', '47.9%'], ['Nov 2025', '15', '$45,186', '$29,239', '$15,947', '35.3%'],
+  ['Dec 2025', '16', '$56,080', '$33,284', '$22,796', '40.6%'], ['Jan 2026', '17', '$43,275', '$27,128', '$16,147', '37.3%'],
+  ['Feb 2026', '18', '$49,480', '$33,962', '$15,518', '31.4%'], ['Mar 2026', '19', '$62,885', '$33,374', '$29,511', '46.9%'],
+  ['Apr 2026', '20', '$85,200', '$61,840', '$23,360', '27.4%'], ['May 2026', '21', '$93,139', '$59,241', '$33,897', '36.4%'],
+  ['Jun 2026', '22', '$73,406', '$62,755', '$10,651', '14.5%'], ['Jul 2026', '23', '$86,105', '$59,546', '$26,559', '30.8%'],
+  ['Aug 2026', '24', '$114,709', '$66,799', '$47,910', '41.8%'], ['Sep 2026', '25', '$112,410', '$50,066', '$62,344', '55.5%'],
 ] };
 
 // ---- Parse the Dashboard tab layout into sections of tiles / a bar table ----
@@ -164,21 +175,55 @@ function trendText(parent, s) {
   });
 }
 
-function sparkline(chars) {
-  const vals = [...chars].map((c) => SPARK.indexOf(c) + 1), n = vals.length, w = 9, gap = 3, H = 28;
-  const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');
+// ---- Monthly values from the Calc tab, for hover tooltips on the trend bars ----
+const SERIES = { 'REVENUE': 2, 'COGS': 3, 'GROSS PROFIT': 4, 'GROSS MARGIN': 5 };   // tile label -> Calc column
+const money = (s) => { const t = String(s ?? '').trim(); const n = parseFloat(t.replace(/[^0-9.\-]/g, '')); return /\d/.test(t) && !isNaN(n) ? (/^\(.*\)$/.test(t) ? -Math.abs(n) : n) : NaN; };
+
+function parseCalc(rows) {
+  const seen = new Set(), out = [];
+  for (const r of rows || []) {
+    const m = String(r[0] ?? '').trim();
+    if (!/^[A-Za-z]{3} \d{4}$/.test(m)) continue;
+    if (seen.has(m)) break;                       // later blocks on the tab repeat the months
+    seen.add(m); out.push({ month: m, cols: r });
+  }
+  return out;
+}
+
+const tip = (() => { const t = document.createElement('div'); t.id = 'tip'; document.body.append(t); return t; })();
+function showTip(rect, month, text) {
+  tip.replaceChildren(el('b', '', text), document.createTextNode('  ·  ' + month));
+  tip.style.display = 'block';
+  tip.style.left = Math.min(Math.max(rect.left + rect.width / 2, 90), innerWidth - 90) + 'px';
+  tip.style.top = rect.top - 8 + 'px';
+}
+
+// chars: the sheet's block-character trend; pts: real monthly values [{month, text, value}] (same length) when available.
+function sparkline(chars, pts) {
+  const real = pts && pts.length === [...chars].length;
+  const vals = real ? pts.map((p) => p.value) : [...chars].map((c) => SPARK.indexOf(c) + 1);
+  const n = vals.length, w = real ? 14 : 9, gap = real ? 4 : 3, H = real ? 44 : 28, top = Math.max(...vals.map(Math.abs), 1e-9);
+  const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg'), mk = (t) => document.createElementNS(ns, t);
   svg.setAttribute('viewBox', `0 0 ${n * (w + gap)} ${H}`); svg.setAttribute('width', n * (w + gap)); svg.setAttribute('height', H);
-  svg.setAttribute('aria-hidden', 'true');
+  if (!real) svg.setAttribute('aria-hidden', 'true');
   vals.forEach((v, i) => {
-    const h = Math.max(3, (v / 8) * H), r = document.createElementNS(ns, 'rect');
+    const h = Math.max(3, (Math.abs(v) / (real ? top : 8)) * H), r = mk('rect'), base = i === n - 1 ? 'var(--blue)' : '#b8b3a1';
     r.setAttribute('x', i * (w + gap)); r.setAttribute('y', H - h); r.setAttribute('width', w); r.setAttribute('height', h);
-    r.setAttribute('rx', 2); r.setAttribute('fill', i === n - 1 ? 'var(--blue)' : '#b8b3a1'); svg.append(r);
+    r.setAttribute('rx', 2); r.setAttribute('fill', base); svg.append(r);
+    if (!real) return;
+    const hit = mk('rect'); hit.setAttribute('class', 'hit'); hit.setAttribute('x', i * (w + gap) - gap / 2); hit.setAttribute('y', 0);
+    hit.setAttribute('width', w + gap); hit.setAttribute('height', H); hit.setAttribute('fill', 'transparent');
+    const on = () => { r.setAttribute('fill', 'var(--blue-dim)'); showTip(r.getBoundingClientRect(), pts[i].month, pts[i].text); };
+    const off = () => { r.setAttribute('fill', base); tip.style.display = 'none'; };
+    hit.addEventListener('pointerenter', on); hit.addEventListener('pointerdown', on); hit.addEventListener('pointerleave', off);
+    svg.append(hit);
   });
+  if (real) svg.setAttribute('aria-label', 'Monthly trend: hover or tap a bar for that month');
   return svg;
 }
 
 function render(d) {
-  const p = parse(d.grid || []);
+  const p = parse(d.grid || []), months = parseCalc(d.calc);
   $('title').textContent = p.title || 'Dashboard';
   $('sub').textContent = p.sub;
   $('banner').hidden = !p.banner; $('banner').textContent = p.banner;
@@ -192,7 +237,12 @@ function render(d) {
       tiles.forEach((t) => {
         const tile = el('div', 'tile'); tile.append(el('div', 'l', t.label), el('div', 'v', t.value));
         const n = el('div', 'n'); trendText(n, t.note); tile.append(n);
-        if (t.spark) tile.append(sparkline(t.spark));
+        if (t.spark) {
+          const col = SERIES[t.label.toUpperCase()], n = [...t.spark].length;
+          const pts = col == null ? null : months.map((m) => ({ month: m.month, text: String(m.cols[col] ?? '').trim(), value: money(m.cols[col]) }))
+            .filter((p) => !isNaN(p.value)).slice(-n);
+          tile.append(sparkline(t.spark, pts));
+        }
         g.append(tile);
       });
       sec.append(g);
