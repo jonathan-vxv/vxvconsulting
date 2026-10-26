@@ -123,6 +123,13 @@ const DEMO_DATA = { fetchedAt: new Date().toISOString(), grid: [
   R('Misc', '', '███████', '', '', '', '$9,197   ▼ 2%'),
   R('Total', '', '', '', '', '', '$99,834   ▲ 9%'),
   R('Trends, charts and the full numbers are on the Detail tab.'),
+], cash: [   // Cash_Log tab rows: Date, Relay, Bank of Bozeman, Bill card
+  ['Date', 'Relay Bank Account', 'Bank of Bozeman Account', 'Bill Credit Card'], ['Type →', 'Bank', 'Bank', 'Credit Card'],
+  ['Aug 3, 2026', '$9,100.00', '$14,200.00', '$2,100.00'], ['Aug 12, 2026', '$11,800.00', '$13,900.00', '$1,200.00'],
+  ['Aug 24, 2026', '$8,400.00', '$15,100.00', '$3,300.00'], ['Sep 2, 2026', '$7,900.00', '$12,600.00', '$800.00'],
+  ['Sep 14, 2026', '$10,200.00', '$16,800.00', '$1,500.00'], ['Sep 28, 2026', '$12,900.00', '$18,300.00', '$600.00'],
+  ['Oct 6, 2026', '$11,500.00', '$17,700.00', '$0.00'], ['Oct 13, 2026', '$12,800.00', '$19,100.00', '$0.00'],
+  ['Oct 20, 2026', '$13,346.83', '$20,032.45', '$0.00'],
 ], calc: [   // Calc tab rows: Month, P&L col, Revenue, COGS, Gross Profit, GP %
   ['Oct 2025', '14', '$55,610', '$28,993', '$26,618', '47.9%'], ['Nov 2025', '15', '$45,186', '$29,239', '$15,947', '35.3%'],
   ['Dec 2025', '16', '$56,080', '$33,284', '$22,796', '40.6%'], ['Jan 2026', '17', '$43,275', '$27,128', '$16,147', '37.3%'],
@@ -194,7 +201,7 @@ function parseCalc(rows) {
 
 const tip = (() => { const t = document.createElement('div'); t.id = 'tip'; document.body.append(t); return t; })();
 function showTip(rect, month, text) {
-  tip.replaceChildren(el('b', '', text), document.createTextNode('  ·  ' + month));
+  tip.replaceChildren(el('b', '', text), document.createTextNode(month ? '  ·  ' + month : ''));
   tip.style.display = 'block';
   tip.style.left = Math.min(Math.max(rect.left + rect.width / 2, 90), innerWidth - 90) + 'px';
   tip.style.top = rect.top - 8 + 'px';
@@ -224,8 +231,63 @@ function sparkline(chars, pts) {
   return svg;
 }
 
+// ---- Available-cash history from the Cash_Log tab: banks minus credit cards, per log date ----
+const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+function parseDate(s) {
+  const t = String(s ?? '').trim();
+  if (/^[A-Za-z]{3} \d{1,2}, \d{4}$/.test(t)) { const ms = Date.parse(t + ' 12:00'); return isNaN(ms) ? null : ms; }
+  const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+  return m ? new Date(m[3].length === 2 ? 2000 + +m[3] : +m[3], +m[1] - 1, +m[2], 12).getTime() : null;
+}
+
+function parseCash(rows) {
+  rows = rows || [];
+  const typeRow = rows.find((r) => /^type/i.test(String(r[0] ?? '').trim()));
+  if (!typeRow) return [];
+  const cols = [];                                 // [column index, +1 bank / -1 credit card]
+  typeRow.forEach((v, i) => { const t = String(v ?? '').trim().toLowerCase(); if (i && t === 'bank') cols.push([i, 1]); else if (i && /credit/.test(t)) cols.push([i, -1]); });
+  if (!cols.length) return [];
+  const byDay = new Map();
+  for (const r of rows) {
+    const date = parseDate(r[0]); if (date == null) continue;
+    const vals = cols.map(([i, s]) => s * money(r[i]));
+    if (vals.some(isNaN)) continue;                // skip rows where any account is blank
+    const value = vals.reduce((a, b) => a + b, 0);
+    byDay.set(date, { date, value, text: usd.format(value) + ' on ' + new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) });
+  }
+  const all = [...byDay.values()].sort((a, b) => a.date - b.date);
+  const cutoff = all.length ? all[all.length - 1].date - 90 * 864e5 : 0;      // last 90 days of log activity
+  return all.filter((p) => p.date >= cutoff);
+}
+
+function lineChart(pts) {
+  const W = 216, H = 44, pad = 4, ns = 'http://www.w3.org/2000/svg', mk = (t) => document.createElementNS(ns, t);
+  const t0 = pts[0].date, span = pts[pts.length - 1].date - t0 || 1;
+  const lo = Math.min(...pts.map((p) => p.value)), hi = Math.max(...pts.map((p) => p.value)), rng = hi - lo || 1;
+  const xy = pts.map((p) => [pad + ((p.date - t0) / span) * (W - 2 * pad), pad + (1 - (p.value - lo) / rng) * (H - 2 * pad)]);
+  const svg = mk('svg'); svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.style.maxWidth = W + 'px';
+  svg.setAttribute('aria-label', 'Available cash over time: hover a point for the balance on that date');
+  const line = xy.map((q, i) => (i ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join(' ');
+  const area = mk('path'); area.setAttribute('d', `${line} L${xy[xy.length - 1][0].toFixed(1)} ${H} L${xy[0][0].toFixed(1)} ${H} Z`); area.setAttribute('fill', 'var(--blue)'); area.setAttribute('opacity', '.1');
+  const path = mk('path'); path.setAttribute('d', line); path.setAttribute('fill', 'none'); path.setAttribute('stroke', 'var(--blue)');
+  path.setAttribute('stroke-width', '2'); path.setAttribute('stroke-linejoin', 'round'); path.setAttribute('stroke-linecap', 'round');
+  const end = mk('circle'); end.setAttribute('cx', xy[xy.length - 1][0]); end.setAttribute('cy', xy[xy.length - 1][1]); end.setAttribute('r', 3); end.setAttribute('fill', 'var(--blue)');
+  const dot = mk('circle'); dot.setAttribute('r', 4); dot.setAttribute('fill', 'var(--blue-dim)'); dot.setAttribute('stroke', '#fff'); dot.setAttribute('stroke-width', '1.5'); dot.style.display = 'none';
+  const hit = mk('rect'); hit.setAttribute('class', 'hit'); hit.setAttribute('width', W); hit.setAttribute('height', H); hit.setAttribute('fill', 'transparent');
+  const at = (e) => {
+    const b = svg.getBoundingClientRect(), x = ((e.clientX - b.left) / b.width) * W;
+    let k = 0; xy.forEach((q, i) => { if (Math.abs(q[0] - x) < Math.abs(xy[k][0] - x)) k = i; });
+    dot.setAttribute('cx', xy[k][0]); dot.setAttribute('cy', xy[k][1]); dot.style.display = '';
+    showTip({ left: b.left + (xy[k][0] / W) * b.width, width: 0, top: b.top + (xy[k][1] / H) * b.height - 4 }, '', pts[k].text);
+  };
+  const off = () => { dot.style.display = 'none'; tip.style.display = 'none'; };
+  ['pointerenter', 'pointermove', 'pointerdown'].forEach((ev) => hit.addEventListener(ev, at)); hit.addEventListener('pointerleave', off);
+  svg.append(area, path, end, dot, hit);
+  return svg;
+}
+
 function render(d) {
-  const p = parse(d.grid || []), months = parseCalc(d.calc);
+  const p = parse(d.grid || []), months = parseCalc(d.calc), cash = parseCash(d.cash);
   $('title').textContent = p.title || 'Dashboard';
   $('sub').textContent = p.sub;
   $('banner').hidden = !p.banner; $('banner').textContent = p.banner;
@@ -244,7 +306,7 @@ function render(d) {
           const pts = col == null ? null : months.map((m) => ({ month: m.month, text: String(m.cols[col] ?? '').trim(), value: money(m.cols[col]) }))
             .filter((p) => !isNaN(p.value)).slice(-n);
           tile.append(sparkline(t.spark, pts));
-        }
+        } else if (t.label.toUpperCase() === 'AVAILABLE CASH' && cash.length >= 2) tile.append(lineChart(cash));
         g.append(tile);
       });
       sec.append(g);
