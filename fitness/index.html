@@ -124,6 +124,7 @@
   .sugg { padding: 12px 0; border-top: 1px solid var(--line); }
   .sugg h3 { font-size: .92rem; font-weight: 600; margin: 4px 0 2px; }
   .sugg p { font-size: .88rem; color: var(--ink-2); }
+  .sugg .who { font-size: .78rem; font-weight: 600; color: var(--ink-2); margin-right: 6px; }
   .bal { display: grid; grid-template-columns: 78px minmax(0, 1fr) 34px; gap: 10px; align-items: center; padding: 5px 0; font-size: .85rem; }
   .bal .track { height: 12px; border-radius: 4px; background: var(--sunk); overflow: hidden; }
   .bal .fill { height: 100%; border-radius: 4px; background: var(--series); }
@@ -165,6 +166,18 @@
     <div class="row" style="margin-top:14px;justify-content:flex-end">
       <button class="btn" type="button" id="passCancel">Cancel</button>
       <button class="btn primary" type="submit" id="passGo">Unlock</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="profileDlg">
+  <form method="dialog" id="profileForm">
+    <h2 style="font-size:1.1rem;margin-bottom:4px">About me</h2>
+    <p class="sub" style="margin-bottom:12px">Your stats, situation and goals. The coaches' corner is written from this and your log. Only you can read or change it here, but what the coaches write back is visible to anyone viewing the page.</p>
+    <textarea id="profileText" maxlength="2000" style="min-height:170px" placeholder="Age, height, weight, goals, anything a coach should know"></textarea>
+    <p class="err" id="profileErr" hidden></p>
+    <div class="row" style="margin-top:14px;justify-content:flex-end">
+      <button class="btn" type="button" id="profileCancel">Cancel</button>
+      <button class="btn primary" type="submit" id="profileGo">Save</button>
     </div>
   </form>
 </dialog>
@@ -287,9 +300,10 @@ function demoSessions() {
   return out.reverse();
 }
 const demo = { sessions: null, insights: { headline: 'Training is steady at three to four sessions a week and your main lifts are still climbing.', generatedAt: new Date().toISOString(), sessionCount: 0, suggestions: [
-  { category: 'progression', title: 'Add 5 lb to your squat next leg day', detail: 'You have hit every rep at your current weight for two sessions running, so a small jump is due.' },
-  { category: 'balance', title: 'Add a second shoulder exercise', detail: 'Shoulders get about half the weekly sets that chest and back do. Lateral raises after overhead press would even that out.' },
-  { category: 'consistency', title: 'Protect the Saturday run', detail: 'It is the session you skip most often. A shorter, easier run still keeps the habit.' },
+  { coach: 'Dan Go', category: 'progression', title: 'Add 5 lb to your squat next leg day', detail: 'You have hit every rep at your current weight for two sessions running, so a small jump is due. Heavy compound lifts a few times a week are the core of his approach to getting lean.' },
+  { coach: 'Peter Attia', category: 'conditioning', title: 'Add one zone 2 session a week', detail: 'Your log has one short run most weeks. From a healthspan view, a steady 30 to 45 minutes at a pace where you can still talk builds the aerobic base everything else sits on.' },
+  { coach: 'Andrew Huberman', category: 'balance', title: 'Add a second shoulder exercise', detail: 'Shoulders get about half the weekly sets that chest and back do. Lateral raises after overhead press would even that out.' },
+  { coach: 'Tim Ferriss', category: 'consistency', title: 'Protect the Saturday run', detail: 'It is the session you skip most often. A shorter, easier run still keeps the habit.' },
 ] } };
 async function demoApi(method, path, body) {
   demo.sessions = demo.sessions || demoSessions();
@@ -299,6 +313,7 @@ async function demoApi(method, path, body) {
     { kind: 'strength', exercise: 'Bench Press', group: 'chest', note: '', sets: [{ weight: 185, reps: 5 }, { weight: 185, reps: 5 }, { weight: 185, reps: 4 }] },
     { kind: 'strength', exercise: 'Overhead Press', group: 'shoulders', note: '', sets: [{ weight: 105, reps: 6 }, { weight: 105, reps: 6 }] },
     { kind: 'cardio', exercise: 'Run', group: 'cardio', note: 'easy pace', minutes: 20, distance: 2 }] }, uncertain: ['Bench Press: the last set could be 4 or 9 reps'], dateFromPage: false };
+  if (path === '/api/profile') { if (typeof body.profile === 'string') demo.profile = body.profile; return { profile: demo.profile || '' }; }
   if (path === '/api/insights') return { insights: { ...demo.insights, generatedAt: new Date().toISOString(), sessionCount: demo.sessions.length } };
   if (method === 'POST' && path === '/api/sessions') { const s = { ...body, id: 'd' + Date.now() }; demo.sessions.unshift(s); return { session: s }; }
   const id = path.split('/').pop();
@@ -486,12 +501,15 @@ function viewDashboard() {
 
 function suggestionsHtml() {
   const i = S.insights, fresh = i ? S.sessions.length - i.sessionCount : 0, busy = S.busy === 'insights';
-  const btn = S.pass ? `<button class="btn small" data-act="insights" type="button" ${busy ? 'disabled' : ''}>${busy ? '<span class="spin"></span>' : i ? 'Refresh' : 'Get suggestions'}</button>` : '';
-  if (!i) return `<div class="row"><div class="grow"><h2>Suggestions</h2><p class="hint" style="margin:0">${S.pass ? 'Coaching notes based on your history.' : 'Unlock to generate coaching notes from your history.'}</p></div>${btn}</div>`;
-  return `<div class="row" style="align-items:flex-start"><div class="grow"><h2>Suggestions</h2>
-    <p class="hint">Written ${fmt(i.generatedAt.slice(0, 10), { month: 'short', day: 'numeric' })} from ${i.sessionCount} workout${i.sessionCount === 1 ? '' : 's'}${fresh > 0 ? ` · ${fresh} logged since` : ''}</p></div>${btn}</div>
+  const btns = S.pass ? `<div class="row" style="flex:none"><button class="btn small ghost" data-act="profile" type="button">About me</button>
+    <button class="btn small" data-act="insights" type="button" ${busy ? 'disabled' : ''}>${busy ? '<span class="spin"></span>' : i ? 'Refresh' : 'Ask the coaches'}</button></div>` : '';
+  const who = 'Peter Attia, Andrew Huberman, Dan Go and Tim Ferriss';
+  if (!i) return `<div class="row wrap"><div class="grow"><h2>Coaches' corner</h2><p class="hint" style="margin:0">${S.pass ? `Your log, read through the approaches of ${who}.` : 'Unlock to have your log reviewed.'}</p></div>${btns}</div>`;
+  return `<div class="row wrap" style="align-items:flex-start"><div class="grow"><h2>Coaches' corner</h2>
+    <p class="hint">Written ${fmt(i.generatedAt.slice(0, 10), { month: 'short', day: 'numeric' })} from ${i.sessionCount} workout${i.sessionCount === 1 ? '' : 's'}${fresh > 0 ? ` · ${fresh} logged since` : ''}</p></div>${btns}</div>
     <p style="font-size:1.02rem;font-weight:600;margin-bottom:10px">${esc(i.headline)}</p>
-    ${i.suggestions.map((s) => `<div class="sugg"><span class="chip">${esc(s.category)}</span><h3>${esc(s.title)}</h3><p>${esc(s.detail)}</p></div>`).join('')}`;
+    ${i.suggestions.map((s) => `<div class="sugg">${s.coach ? `<span class="who">${esc(s.coach)} lens</span>` : ''}<span class="chip">${esc(s.category)}</span><h3>${esc(s.title)}</h3><p>${esc(s.detail)}</p></div>`).join('')}
+    <p class="hint" style="margin:12px 0 0;border-top:1px solid var(--line);padding-top:10px">Written by Claude from your log, applying each coach's published approach. These are not their words, and not medical advice.</p>`;
 }
 
 function viewHistory() {
@@ -667,6 +685,7 @@ document.addEventListener('click', async (ev) => {
   const i = t.closest('[data-i]') ? +t.closest('[data-i]').dataset.i : null, j = t.closest('[data-j]') ? +t.closest('[data-j]').dataset.j : null;
   if (act === 'unlock') return openUnlock();
   if (act === 'insights') return refreshInsights();
+  if (act === 'profile') return openProfile();
   if (act === 'photo') return $('#photoInput').click();
   if (act === 'read-text') return readText();
   if (act === 'save') return saveDraft();
@@ -735,6 +754,21 @@ $('#unlockForm').addEventListener('submit', async (ev) => {
   try { await api('POST', '/api/auth'); store.set(v); $('#unlock').close(); renderChrome(); render(); toast('Unlocked'); }
   catch (e) { S.pass = ''; $('#passErr').textContent = e.message; $('#passErr').hidden = false; }
   go_.disabled = false;
+});
+
+async function openProfile() {
+  const dlg = $('#profileDlg'), box = $('#profileText'), err = $('#profileErr');
+  err.hidden = true; box.value = ''; box.disabled = true; dlg.showModal();
+  try { box.value = (await api('POST', '/api/profile', {})).profile || ''; } catch (e) { err.textContent = e.message; err.hidden = false; }
+  box.disabled = false;
+}
+$('#profileCancel').addEventListener('click', () => $('#profileDlg').close());
+$('#profileForm').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const btn = $('#profileGo'); btn.disabled = true;
+  try { await api('POST', '/api/profile', { profile: $('#profileText').value }); $('#profileDlg').close(); toast('Saved. Refresh the coaches to use it.'); }
+  catch (e) { $('#profileErr').textContent = e.message; $('#profileErr').hidden = false; }
+  btn.disabled = false;
 });
 
 let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(drawCharts, 150); });
