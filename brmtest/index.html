@@ -70,6 +70,7 @@
   #cb .cb-card { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 20px 22px; }
   #cb .cb-headline { font-size: 1.1rem; font-weight: 600; letter-spacing: -.01em; margin: 0 0 16px; }
   #cb .cb-msg { color: var(--ink-dim); font-size: .92rem; margin: 0; }
+  #cb .cb-from { margin: 0 0 10px; font-size: .82rem; }
   #cb .cb-stale { background: var(--warn-bg); color: var(--neg); border-radius: 10px; padding: 8px 12px; font-size: .82rem; margin: 0 0 14px; }
   #cb ol { list-style: none; margin: 0; padding: 0; counter-reset: a; }
   #cb li { counter-increment: a; display: grid; grid-template-columns: 28px 1fr; gap: 0 12px; padding: 14px 0; border-top: 1px solid var(--line); }
@@ -111,7 +112,7 @@
     </div>
     <div class="banner" id="banner" hidden></div>
     <section class="sec" id="cb" hidden>
-      <h2>CRYSTAL BALL  ·  TODAY</h2>
+      <h2>CRYSTAL BALL</h2>
       <div class="cb-card" id="cb-body"></div>
     </section>
     <div id="sections"></div>
@@ -384,12 +385,16 @@ function renderCB(d) {
   });
 
   if (d.status === 'none' || (d.status === 'error' && !(d.actions || []).length)) {
-    body.append(el('p', 'cb-msg', d.status === 'none' ? 'No reading yet. The first one runs tomorrow morning, or run it now.' : 'The last run did not finish. Try running it again.'));
+    body.append(el('p', 'cb-msg', d.status === 'none' ? 'No reading yet. It runs Monday and Thursday mornings, or run it now.' : 'The last run did not finish. Try running it again.'));
     foot.append(run); body.append(foot); return;
   }
+  // Runs are Mondays and Thursdays, so a reading up to 4 days old is current; older means a run was missed.
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Denver' });
+  const age = d.date ? Math.round((Date.parse(todayStr) - Date.parse(d.date)) / 864e5) : 0;
+  const from = d.date ? new Date(d.date + 'T12:00').toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' }) : '';
   if (d.status === 'error') body.append(el('p', 'cb-stale', 'The latest run did not finish, so these suggestions may be out of date.'));
-  else if (d.date && d.date !== new Date().toLocaleDateString('en-CA', { timeZone: 'America/Denver' }))
-    body.append(el('p', 'cb-stale', 'These suggestions are from ' + new Date(d.date + 'T12:00').toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' }) + '.'));
+  else if (age > 4) body.append(el('p', 'cb-stale', 'These suggestions are from ' + from + ' and may be out of date.'));
+  else if (age > 0) body.append(el('p', 'cb-msg cb-from', 'From ' + from + '. Next reading Monday or Thursday morning.'));
   if (d.headline) body.append(el('p', 'cb-headline', d.headline));
   if (!(d.actions || []).length) body.append(el('p', 'cb-msg', 'Nothing stood out in the numbers this morning.'));
 
