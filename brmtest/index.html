@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Dashboard Preview | VXV Consulting</title>
+<style>
+  :root {
+    --bg: #faf9f5; --bg-alt: #f0eee6; --ink: #23221e; --ink-dim: #77746a;
+    --blue: #0071e3; --blue-dim: #0058b0; --line: #ddd9cc; --neg: #b3261e; --pos: #1e7a3c; --warn-bg: #fdecea;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.47; -webkit-font-smoothing: antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 24px; }
+  header { border-bottom: 1px solid var(--line); }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; height: 48px; }
+  .brand { font-weight: 600; font-size: .95rem; color: var(--ink); text-decoration: none; }
+  button { font: inherit; cursor: pointer; }
+  .btn { background: var(--blue); color: #fff; border: 0; border-radius: 980px; padding: 10px 20px; font-size: .95rem; }
+  .btn:hover { background: var(--blue-dim); }
+  .btn:disabled { opacity: .6; cursor: default; }
+  .link { background: none; border: 0; color: var(--blue); font-size: .8rem; padding: 0; }
+
+  #login { max-width: 360px; margin: 96px auto; padding: 0 24px; text-align: center; }
+  #login h1 { font-size: 1.8rem; letter-spacing: -.02em; margin: 0 0 8px; }
+  #login p { color: var(--ink-dim); margin: 0 0 24px; }
+  #login input { width: 100%; font: inherit; padding: 11px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; margin-bottom: 12px; }
+  #login input:focus { outline: 2px solid var(--blue); outline-offset: 1px; }
+  .err { color: var(--neg); font-size: .85rem; min-height: 1.3em; margin: 0 0 12px; }
+
+  #dash { display: none; padding: 40px 0 80px; }
+  .top { margin-bottom: 20px; }
+  .top h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); letter-spacing: -.02em; margin: 0 0 2px; }
+  .top .sub { color: var(--ink-dim); font-size: .95rem; }
+  .meta { color: var(--ink-dim); font-size: .8rem; display: flex; gap: 16px; align-items: center; margin-top: 6px; }
+  .banner { background: var(--warn-bg); color: var(--neg); border-radius: 12px; padding: 10px 16px; font-size: .85rem; font-weight: 600; margin-bottom: 28px; }
+
+  .sec { margin-bottom: 36px; }
+  .sec h2 { font-size: .78rem; font-weight: 600; letter-spacing: .06em; color: var(--ink-dim); margin: 0 0 12px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  .tile { background: var(--bg-alt); border-radius: 18px; padding: 18px 22px; }
+  .tile .l { font-size: .72rem; font-weight: 600; letter-spacing: .05em; color: var(--ink-dim); }
+  .tile .v { font-size: 1.9rem; font-weight: 700; letter-spacing: -.02em; margin: 2px 0; }
+  .tile .n { font-size: .8rem; color: var(--ink-dim); }
+  .tile { display: flex; flex-direction: column; }
+  .tile .n { margin-bottom: 12px; }
+  .tile svg { display: block; width: 100%; height: auto; margin: auto auto 0; }   /* shrinks to fit the tile, centered, pinned to the bottom */
+  .up { color: var(--pos); } .down { color: var(--neg); }
+  .tile svg .hit { cursor: default; }
+  #tip { position: fixed; z-index: 30; pointer-events: none; background: var(--ink); color: #fff; font-size: .78rem; line-height: 1.3;
+    padding: 6px 10px; border-radius: 8px; white-space: nowrap; transform: translate(-50%, -100%); display: none; }
+  #tip b { font-weight: 700; }
+
+  .card { background: var(--bg-alt); border-radius: 18px; padding: 8px 22px; }
+  .row { display: grid; grid-template-columns: minmax(120px, 190px) 1fr auto; gap: 16px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: .92rem; }
+  .row:last-child { border-bottom: 0; }
+  .row.head { font-size: .72rem; font-weight: 600; letter-spacing: .05em; color: var(--ink-dim); padding: 10px 0; }
+  .row.total { font-weight: 700; }
+  .bar { height: 12px; background: var(--blue); border-radius: 6px; min-width: 2px; }
+  .row .val { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  @media (max-width: 520px) { .row { grid-template-columns: 1fr auto; } .row .bar { grid-column: 1 / -1; order: 3; } }
+  .foot { color: var(--ink-dim); font-size: .75rem; text-align: center; }
+
+  /* ---- Preview ribbon + Crystal Ball ---- */
+  .preview { background: #fff4d6; color: #7a5600; font-size: .78rem; font-weight: 600; text-align: center; padding: 6px 16px; }
+  #cb { margin-bottom: 36px; }
+  #cb .cb-card { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 20px 22px; }
+  #cb .cb-headline { font-size: 1.1rem; font-weight: 600; letter-spacing: -.01em; margin: 0 0 16px; }
+  #cb .cb-msg { color: var(--ink-dim); font-size: .92rem; margin: 0; }
+  #cb .cb-stale { background: var(--warn-bg); color: var(--neg); border-radius: 10px; padding: 8px 12px; font-size: .82rem; margin: 0 0 14px; }
+  #cb ol { list-style: none; margin: 0; padding: 0; counter-reset: a; }
+  #cb li { counter-increment: a; display: grid; grid-template-columns: 28px 1fr; gap: 0 12px; padding: 14px 0; border-top: 1px solid var(--line); }
+  #cb li::before { content: counter(a); width: 28px; height: 28px; border-radius: 50%; background: var(--blue); color: #fff; font-weight: 700;
+    font-size: .85rem; display: flex; align-items: center; justify-content: center; }
+  #cb .t { font-weight: 600; font-size: .98rem; }
+  #cb .w { font-size: .9rem; margin: 2px 0 8px; }
+  #cb .ev { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  #cb .ev span { background: var(--bg-alt); border-radius: 8px; padding: 3px 9px; font-size: .78rem; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+  #cb .tags { font-size: .72rem; font-weight: 600; letter-spacing: .05em; color: var(--ink-dim); text-transform: uppercase; margin-right: 8px; }
+  #cb .fb { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  #cb .fb button { background: none; border: 1px solid var(--line); border-radius: 980px; padding: 4px 12px; font-size: .78rem; color: var(--ink); }
+  #cb .fb button:hover { border-color: var(--blue); color: var(--blue); }
+  #cb .fb button.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+  #cb .cb-foot { color: var(--ink-dim); font-size: .75rem; margin-top: 12px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="preview">Preview for VXV review only. The live dashboard at /BRM is unchanged.</div>
+<header><div class="wrap">
+  <a class="brand" href="/">VXV Consulting</a>
+  <button class="link" id="logout" hidden>Sign out</button>
+</div></header>
+
+<main>
+  <form id="login" autocomplete="off">
+    <h1>Leadership dashboard</h1>
+    <p>Enter the access code Jonathan sent you.</p>
+    <input id="code" type="password" placeholder="Access code" autocomplete="current-password" required>
+    <div class="err" id="err" role="alert"></div>
+    <button class="btn" id="go" type="submit">View dashboard</button>
+  </form>
+
+  <div id="dash"><div class="wrap">
+    <div class="top">
+      <h1 id="title"></h1>
+      <div class="sub" id="sub"></div>
+      <div class="meta"><span id="updated"></span><button class="link" id="refresh">Refresh</button></div>
+    </div>
+    <div class="banner" id="banner" hidden></div>
+    <section class="sec" id="cb" hidden>
+      <h2>CRYSTAL BALL  ·  TODAY</h2>
+      <div class="cb-card" id="cb-body"></div>
+    </section>
+    <div id="sections"></div>
+    <p class="foot">Figures update from the live financial workbook maintained by VXV Consulting.</p>
+  </div></div>
+</main>
+
+<script>
+const API = 'https://vxv-dashboard-api.jonathan-c6b.workers.dev/api/dashboard';
+const CB_API = 'https://vxv-dashboard-api.jonathan-c6b.workers.dev/api/crystal';
+const DEMO = new URLSearchParams(location.search).has('demo');
+
+const $ = (id) => document.getElementById(id);
+const store = { get: () => { try { return sessionStorage.getItem('vxv_code'); } catch { return null; } },
+                set: (v) => { try { v ? sessionStorage.setItem('vxv_code', v) : sessionStorage.removeItem('vxv_code'); } catch {} } };
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+// Fake grid in the same shape the API returns for the Dashboard tab (A1:H..).
+const R = (b = '', c = '', d = '', e = '', f = '', g = '', h = '') => ['', b, c, d, e, f, g, h];
+const DEMO_DATA = { fetchedAt: new Date().toISOString(), grid: [
+  R('Bozeman Radon & Mold'), R('Leadership dashboard  ·  Books through September 2026  ·  Cash as of Oct 20'), R('SAMPLE DATA — not real numbers'), R(),
+  R('CASH POSITION'),
+  R('AVAILABLE CASH', '', 'PAYROLLS COVERED', '', 'CREDIT CARD BALANCE', '', 'JOBBER LOAN REMAINING'),
+  R('$33,379', '', '2.4 runs', '', '-', '', '$73,739'),
+  R('Relay + Bank of Bozeman, minus Bill card', '', 'Avg run $14,182', '', 'Bill card — amount owed', '', 'Paid down $17,951 since Aug 31'), R(),
+  R('PROFITABILITY  ·  LAST 6 MONTHS (APR–SEP 2026)'),
+  R('REVENUE', '', 'GROSS PROFIT', '', 'GROSS MARGIN', '', 'AVG PAYROLL RUN'),
+  R('$550,168', '', '$263,890', '', '48.0%', '', '$14,182'),
+  R('▲ 3.3%  vs same period last year', '', '▲ 3.5%  vs last year', '', '▲ 0.1 pts  vs last year', '', 'Latest $16,312 on Oct 16'),
+  R('▆▇█▂▁▂▃▅▅▇▇▇', '', '', '', '▅▇▂▇▁▁█▅▂▁▅▆'), R(),
+  R('REVENUE BY SERVICE  ·  SEPTEMBER 2026'),
+  R('CATEGORY', '', '', '', '', '', 'THIS MONTH  ·  vs LAST YEAR'),
+  R('Radon Mitigation', '', '██████████████████████████████', '', '', '', '$38,991   ▲ 6%'),
+  R('Radon Testing', '', '█████████', '', '', '', '$11,821   ▲ 17%'),
+  R('Mold Remediation', '', '█████████████████████████', '', '', '', '$32,611   ▲ 8%'),
+  R('Mold Testing & Inspection', '', '█████', '', '', '', '$6,614   ▲ 20%'),
+  R('Misc', '', '███████', '', '', '', '$9,197   ▼ 2%'),
+  R('Total', '', '', '', '', '', '$99,834   ▲ 9%'),
+  R('Trends, charts and the full numbers are on the Detail tab.'),
+], cash: [   // Cash_Log tab rows: Date, Relay, Bank of Bozeman, Bill card
+  ['Date', 'Relay Bank Account', 'Bank of Bozeman Account', 'Bill Credit Card'], ['Type →', 'Bank', 'Bank', 'Credit Card'],
+  ['Aug 3, 2026', '$9,100.00', '$14,200.00', '$2,100.00'], ['Aug 12, 2026', '$11,800.00', '$13,900.00', '$1,200.00'],
+  ['Aug 24, 2026', '$8,400.00', '$15,100.00', '$3,300.00'], ['Sep 2, 2026', '$7,900.00', '$12,600.00', '$800.00'],
+  ['Sep 14, 2026', '$10,200.00', '$16,800.00', '$1,500.00'], ['Sep 28, 2026', '$12,900.00', '$18,300.00', '$600.00'],
+  ['Oct 6, 2026', '$11,500.00', '$17,700.00', '$0.00'], ['Oct 13, 2026', '$12,800.00', '$19,100.00', '$0.00'],
+  ['Oct 20, 2026', '$13,346.83', '$20,032.45', '$0.00'],
+], calc: [   // Calc tab rows: Month, P&L col, Revenue, COGS, Gross Profit, GP %
+  ['Oct 2025', '14', '$55,610', '$28,993', '$26,618', '47.9%'], ['Nov 2025', '15', '$45,186', '$29,239', '$15,947', '35.3%'],
+  ['Dec 2025', '16', '$56,080', '$33,284', '$22,796', '40.6%'], ['Jan 2026', '17', '$43,275', '$27,128', '$16,147', '37.3%'],
+  ['Feb 2026', '18', '$49,480', '$33,962', '$15,518', '31.4%'], ['Mar 2026', '19', '$62,885', '$33,374', '$29,511', '46.9%'],
+  ['Apr 2026', '20', '$85,200', '$61,840', '$23,360', '27.4%'], ['May 2026', '21', '$93,139', '$59,241', '$33,897', '36.4%'],
+  ['Jun 2026', '22', '$73,406', '$62,755', '$10,651', '14.5%'], ['Jul 2026', '23', '$86,105', '$59,546', '$26,559', '30.8%'],
+  ['Aug 2026', '24', '$114,709', '$66,799', '$47,910', '41.8%'], ['Sep 2026', '25', '$112,410', '$50,066', '$62,344', '55.5%'],
+] };
+
+// ---- Parse the Dashboard tab layout into sections of tiles / a bar table ----
+const COLS = [1, 3, 5, 7];                       // B, D, F, H hold the four tile columns
+const SPARK = '▁▂▃▄▅▆▇█';
+const isLabel = (v) => { const s = v.replace(/\bvs\b/g, ''); return /[A-Z]{3}/.test(s) && s === s.toUpperCase(); };
+
+function parse(grid) {
+  const out = { title: '', sub: '', banner: '', sections: [] };
+  let sec = null, mode = null, stage = 0;
+  for (const raw of grid) {
+    const r = Array.from({ length: 8 }, (_, i) => String(raw[i] ?? '').trim());
+    if (!r.some(Boolean)) continue;
+    const onlyB = r[1] && r.every((v, i) => i === 1 || !v);
+    if (onlyB) {
+      const b = r[1];
+      if (/sample data/i.test(b) && !sec) out.banner = b;
+      else if (!sec && !out.title) out.title = b;
+      else if (!sec && !out.sub) out.sub = b;
+      else if (/[A-Z]{3}/.test(b) && b === b.toUpperCase()) { sec = { head: b, tiles: [], rows: null, rowHead: null }; out.sections.push(sec); mode = null; }
+      continue;                                  // anything else (footnotes about other tabs) is internal, not shown
+    }
+    if (!sec) continue;
+    const cs = COLS.map((c) => r[c]);
+    if (mode !== 'table' && cs.filter(Boolean).length && cs.filter(Boolean).every(isLabel)) {
+      if (cs[0] && cs[3] && !cs[1] && !cs[2]) { mode = 'table'; sec.rowHead = [cs[0], cs[3]]; sec.rows = []; }
+      else { mode = 'tiles'; stage = 0; sec.tiles = cs.map((l) => (l ? { label: l, value: '', note: '', spark: '' } : null)); }
+      continue;
+    }
+    if (mode === 'table') { sec.rows.push({ name: cs[0], bar: String(raw[3] ?? ''), value: cs[3] }); continue; }
+    if (mode === 'tiles') {
+      if (cs.some((v) => v && [...v].every((ch) => SPARK.includes(ch)))) cs.forEach((v, i) => { if (v && sec.tiles[i]) sec.tiles[i].spark = v; });
+      else { cs.forEach((v, i) => { if (sec.tiles[i]) sec.tiles[i][stage === 0 ? 'value' : 'note'] = v; }); stage++; }
+    }
+  }
+  return out;
+}
+
+// Color ▲ green / ▼ red inside a string.
+function trendText(parent, s) {
+  s.split(/([▲▼][^\s]*(?:\s+[\d.]+\s*(?:pts|%)?)?)/).forEach((part) => {
+    if (!part) return;
+    if (part[0] === '▲' || part[0] === '▼') parent.append(el('span', part[0] === '▲' ? 'up' : 'down', part));
+    else parent.append(part);
+  });
+}
+
+// ---- Monthly values from the Calc tab, for hover tooltips on the trend bars ----
+const SERIES = { 'REVENUE': 2, 'COGS': 3, 'GROSS PROFIT': 4, 'GROSS MARGIN': 5 };   // tile label -> Calc column
+const money = (s) => { const t = String(s ?? '').trim(); const n = parseFloat(t.replace(/[^0-9.\-]/g, '')); return /\d/.test(t) && !isNaN(n) ? (/^\(.*\)$/.test(t) ? -Math.abs(n) : n) : NaN; };
+
+function parseCalc(rows) {
+  const seen = new Set(), out = [];
+  for (const r of rows || []) {
+    const m = String(r[0] ?? '').trim();
+    if (!/^[A-Za-z]{3} \d{4}$/.test(m)) continue;
+    if (seen.has(m)) break;                       // later blocks on the tab repeat the months
+    seen.add(m); out.push({ month: m, cols: r });
+  }
+  return out;
+}
+
+const tip = (() => { const t = document.createElement('div'); t.id = 'tip'; document.body.append(t); return t; })();
+function showTip(rect, month, text) {
+  tip.replaceChildren(el('b', '', text), document.createTextNode(month ? '  ·  ' + month : ''));
+  tip.style.display = 'block';
+  tip.style.left = Math.min(Math.max(rect.left + rect.width / 2, 90), innerWidth - 90) + 'px';
+  tip.style.top = rect.top - 8 + 'px';
+}
+
+// chars: the sheet's block-character trend; pts: real monthly values [{month, text, value}] (same length) when available.
+function sparkline(chars, pts) {
+  const real = pts && pts.length === [...chars].length;
+  const vals = real ? pts.map((p) => p.value) : [...chars].map((c) => SPARK.indexOf(c) + 1);
+  const n = vals.length, w = real ? 14 : 9, gap = real ? 4 : 3, H = real ? 44 : 28, top = Math.max(...vals.map(Math.abs), 1e-9);
+  const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg'), mk = (t) => document.createElementNS(ns, t);
+  svg.setAttribute('viewBox', `0 0 ${n * (w + gap)} ${H}`); svg.style.maxWidth = n * (w + gap) + 'px';
+  if (!real) svg.setAttribute('aria-hidden', 'true');
+  vals.forEach((v, i) => {
+    const h = Math.max(3, (Math.abs(v) / (real ? top : 8)) * H), r = mk('rect'), base = i === n - 1 ? 'var(--blue)' : '#b8b3a1';
+    r.setAttribute('x', i * (w + gap)); r.setAttribute('y', H - h); r.setAttribute('width', w); r.setAttribute('height', h);
+    r.setAttribute('rx', 2); r.setAttribute('fill', base); svg.append(r);
+    if (!real) return;
+    const hit = mk('rect'); hit.setAttribute('class', 'hit'); hit.setAttribute('x', i * (w + gap) - gap / 2); hit.setAttribute('y', 0);
+    hit.setAttribute('width', w + gap); hit.setAttribute('height', H); hit.setAttribute('fill', 'transparent');
+    const on = () => { r.setAttribute('fill', 'var(--blue-dim)'); showTip(r.getBoundingClientRect(), pts[i].month, pts[i].text); };
+    const off = () => { r.setAttribute('fill', base); tip.style.display = 'none'; };
+    hit.addEventListener('pointerenter', on); hit.addEventListener('pointerdown', on); hit.addEventListener('pointerleave', off);
+    svg.append(hit);
+  });
+  if (real) svg.setAttribute('aria-label', 'Monthly trend: hover or tap a bar for that month');
+  return svg;
+}
+
+// ---- Available-cash history from the Cash_Log tab: banks minus credit cards, per log date ----
+const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+function parseDate(s) {
+  const t = String(s ?? '').trim();
+  // "Oct 20, 2026" or "October 20, 2026"
+  if (/^[A-Za-z]{3,9}\.? \d{1,2}, \d{4}$/.test(t)) { const ms = Date.parse(t + ' 12:00'); return isNaN(ms) ? null : ms; }
+  const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+  return m ? new Date(m[3].length === 2 ? 2000 + +m[3] : +m[3], +m[1] - 1, +m[2], 12).getTime() : null;
+}
+
+function parseCash(rows) {
+  rows = rows || [];
+  const typeRow = rows.find((r) => /^type/i.test(String(r[0] ?? '').trim()));
+  if (!typeRow) return [];
+  const cols = [];                                 // [column index, +1 bank / -1 credit card]
+  typeRow.forEach((v, i) => { const t = String(v ?? '').trim().toLowerCase(); if (i && t === 'bank') cols.push([i, 1]); else if (i && /credit/.test(t)) cols.push([i, -1]); });
+  if (!cols.length) return [];
+  const byDay = new Map();
+  for (const r of rows) {
+    const date = parseDate(r[0]); if (date == null) continue;
+    const vals = cols.map(([i, s]) => s * money(r[i]));
+    if (vals.some(isNaN)) continue;                // skip rows where any account is blank
+    const value = vals.reduce((a, b) => a + b, 0);
+    byDay.set(date, { date, value, text: usd.format(value) + ' on ' + new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) });
+  }
+  const all = [...byDay.values()].sort((a, b) => a.date - b.date);
+  const cutoff = all.length ? all[all.length - 1].date - 90 * 864e5 : 0;      // last 90 days of log activity
+  return all.filter((p) => p.date >= cutoff);
+}
+
+function lineChart(pts) {
+  const W = 216, H = 44, pad = 4, ns = 'http://www.w3.org/2000/svg', mk = (t) => document.createElementNS(ns, t);
+  const t0 = pts[0].date, span = pts[pts.length - 1].date - t0 || 1;
+  const lo = Math.min(...pts.map((p) => p.value)), hi = Math.max(...pts.map((p) => p.value)), rng = hi - lo || 1;
+  const xy = pts.map((p) => [pad + ((p.date - t0) / span) * (W - 2 * pad), pad + (1 - (p.value - lo) / rng) * (H - 2 * pad)]);
+  const svg = mk('svg'); svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.style.maxWidth = W + 'px';
+  svg.setAttribute('aria-label', 'Available cash over time: hover a point for the balance on that date');
+  const line = xy.map((q, i) => (i ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join(' ');
+  const area = mk('path'); area.setAttribute('d', `${line} L${xy[xy.length - 1][0].toFixed(1)} ${H} L${xy[0][0].toFixed(1)} ${H} Z`); area.setAttribute('fill', 'var(--blue)'); area.setAttribute('opacity', '.1');
+  const path = mk('path'); path.setAttribute('d', line); path.setAttribute('fill', 'none'); path.setAttribute('stroke', 'var(--blue)');
+  path.setAttribute('stroke-width', '2'); path.setAttribute('stroke-linejoin', 'round'); path.setAttribute('stroke-linecap', 'round');
+  const end = mk('circle'); end.setAttribute('cx', xy[xy.length - 1][0]); end.setAttribute('cy', xy[xy.length - 1][1]); end.setAttribute('r', 3); end.setAttribute('fill', 'var(--blue)');
+  const dot = mk('circle'); dot.setAttribute('r', 4); dot.setAttribute('fill', 'var(--blue-dim)'); dot.setAttribute('stroke', '#fff'); dot.setAttribute('stroke-width', '1.5'); dot.style.display = 'none';
+  const hit = mk('rect'); hit.setAttribute('class', 'hit'); hit.setAttribute('width', W); hit.setAttribute('height', H); hit.setAttribute('fill', 'transparent');
+  const at = (e) => {
+    const b = svg.getBoundingClientRect(), x = ((e.clientX - b.left) / b.width) * W;
+    let k = 0; xy.forEach((q, i) => { if (Math.abs(q[0] - x) < Math.abs(xy[k][0] - x)) k = i; });
+    dot.setAttribute('cx', xy[k][0]); dot.setAttribute('cy', xy[k][1]); dot.style.display = '';
+    showTip({ left: b.left + (xy[k][0] / W) * b.width, width: 0, top: b.top + (xy[k][1] / H) * b.height - 4 }, '', pts[k].text);
+  };
+  const off = () => { dot.style.display = 'none'; tip.style.display = 'none'; };
+  ['pointerenter', 'pointermove', 'pointerdown'].forEach((ev) => hit.addEventListener(ev, at)); hit.addEventListener('pointerleave', off);
+  svg.append(area, path, end, dot, hit);
+  return svg;
+}
+
+function render(d) {
+  const p = parse(d.grid || []), months = parseCalc(d.calc), cash = parseCash(d.cash);
+  $('title').textContent = p.title || 'Dashboard';
+  $('sub').textContent = p.sub;
+  $('banner').hidden = !p.banner; $('banner').textContent = p.banner;
+  $('updated').textContent = 'Updated ' + new Date(d.fetchedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  const box = $('sections'); box.replaceChildren();
+  p.sections.forEach((s) => {
+    const sec = el('section', 'sec'); sec.append(el('h2', '', s.head));
+    const tiles = s.tiles.filter(Boolean);
+    if (tiles.length) {
+      const g = el('div', 'tiles');
+      tiles.forEach((t) => {
+        const tile = el('div', 'tile'); tile.append(el('div', 'l', t.label), el('div', 'v', t.value));
+        const n = el('div', 'n'); trendText(n, t.note); tile.append(n);
+        if (t.spark) {
+          const col = SERIES[t.label.toUpperCase()], n = [...t.spark].length;
+          const pts = col == null ? null : months.map((m) => ({ month: m.month, text: String(m.cols[col] ?? '').trim(), value: money(m.cols[col]) }))
+            .filter((p) => !isNaN(p.value)).slice(-n);
+          tile.append(sparkline(t.spark, pts));
+        } else if (t.label.toUpperCase() === 'AVAILABLE CASH' && cash.length >= 2) tile.append(lineChart(cash));
+        g.append(tile);
+      });
+      sec.append(g);
+    }
+    if (s.rows && s.rows.length) {
+      const max = Math.max(1, ...s.rows.map((r) => [...r.bar].length));
+      const card = el('div', 'card'), head = el('div', 'row head');
+      head.append(el('span', '', s.rowHead[0]), el('span'), el('span', 'val', s.rowHead[1])); card.append(head);
+      s.rows.forEach((r) => {
+        const row = el('div', 'row' + (/^total$/i.test(r.name) ? ' total' : '')), bar = el('div');
+        const len = [...r.bar].length;
+        if (len) { const b = el('div', 'bar'); b.style.width = (len / max) * 100 + '%'; bar.append(b); }
+        const v = el('span', 'val'); trendText(v, r.value);
+        row.append(el('span', '', r.name), bar, v); card.append(row);
+      });
+      sec.append(card);
+    }
+    box.append(sec);
+  });
+  $('login').style.display = 'none'; $('dash').style.display = 'block'; $('logout').hidden = false;
+}
+
+// ---- Crystal Ball: 2-3 suggested actions generated each morning from the workbook ----
+const DEMO_CB = { enabled: true, status: 'ok', date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Denver' }), generatedAt: new Date().toISOString(),
+  headline: 'Revenue held near record levels in September, but the cash log is three weeks old and winter radon season is starting.',
+  actions: [
+    { id: 'd-0', title: 'Update the cash log with today\'s balances', why: 'Every cash figure on this dashboard is from Oct 20, so payroll coverage could be off.',
+      evidence: ['Available cash $33,379 as of Oct 20, 2026', 'Days since the cash log was last updated: 21'], category: 'data', confidence: 'high' },
+    { id: 'd-1', title: 'Push radon testing to realtors and past customers this week', why: 'Testing grew fastest in September, and demand climbs once houses close up for winter.',
+      evidence: ['Radon Testing $11,821 ▲ 17%', 'Mold Testing & Inspection $6,614 ▲ 20%'], category: 'sales', confidence: 'medium' },
+    { id: 'd-2', title: 'Check what drove September\'s margin before quoting winter jobs', why: 'Margin swung from the year\'s low to its high in three months; knowing why keeps winter pricing on track.',
+      evidence: ['Lowest gross margin in the last 12 months: 14.5% (Jun 2026)', 'Sep 2026 gross margin: 55.5%'], category: 'margin', confidence: 'medium' },
+  ] };
+const CB_LABEL = { did: 'Did it', skip: 'Skip', not_useful: 'Not useful' };
+let cbCode = null;
+
+function renderCB(d) {
+  const sec = $('cb'), body = $('cb-body');
+  if (!d || d.enabled === false) { sec.hidden = true; return; }
+  sec.hidden = false; body.replaceChildren();
+  const foot = el('div', 'cb-foot');
+  const run = el('button', 'link', d.status === 'none' ? 'Run now' : 'Run again');
+  run.addEventListener('click', async () => {
+    run.disabled = true; run.textContent = 'Thinking… (up to a minute)';
+    try { renderCB(await cbCall({ action: 'run' })); } catch (e) { run.textContent = e.message; run.disabled = false; }
+  });
+
+  if (d.status === 'none' || (d.status === 'error' && !(d.actions || []).length)) {
+    body.append(el('p', 'cb-msg', d.status === 'none' ? 'No reading yet. The first one runs tomorrow morning, or run it now.' : 'The last run did not finish. Try running it again.'));
+    foot.append(run); body.append(foot); return;
+  }
+  if (d.status === 'error') body.append(el('p', 'cb-stale', 'The latest run did not finish, so these suggestions may be out of date.'));
+  else if (d.date && d.date !== new Date().toLocaleDateString('en-CA', { timeZone: 'America/Denver' }))
+    body.append(el('p', 'cb-stale', 'These suggestions are from ' + new Date(d.date + 'T12:00').toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' }) + '.'));
+  if (d.headline) body.append(el('p', 'cb-headline', d.headline));
+  if (!(d.actions || []).length) body.append(el('p', 'cb-msg', 'Nothing stood out in the numbers this morning.'));
+
+  const ol = el('ol');
+  (d.actions || []).forEach((a) => {
+    const li = el('li'), main = el('div');
+    main.append(el('div', 't', a.title), el('div', 'w', a.why));
+    const ev = el('div', 'ev'); (a.evidence || []).forEach((x) => ev.append(el('span', '', x))); main.append(ev);
+    const fb = el('div', 'fb'); fb.append(el('span', 'tags', a.category + '  ·  ' + a.confidence + ' confidence'));
+    Object.entries(CB_LABEL).forEach(([k, label]) => {
+      const b = el('button', a.feedback === k ? 'on' : '', label);
+      b.addEventListener('click', async () => {
+        fb.querySelectorAll('button').forEach((x) => x.classList.remove('on')); b.classList.add('on');
+        if (!DEMO) try { await cbCall({ action: 'feedback', id: a.id, status: k }); a.feedback = k; } catch { b.classList.remove('on'); }
+      });
+      fb.append(b);
+    });
+    main.append(fb); li.append(main); ol.append(li);
+  });
+  body.append(ol);
+  const when = d.generatedAt ? new Date(d.generatedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  foot.append(el('span', '', 'AI suggestions from the workbook figures' + (when ? ', ' + when : '') + '. Numbers are checked against the workbook.'), run);
+  body.append(foot);
+}
+
+async function cbCall(extra) {
+  if (DEMO) return { ...DEMO_CB, generatedAt: new Date().toISOString() };
+  const res = await fetch(CB_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: cbCode, ...extra }) });
+  if (res.status === 503) throw new Error('Not set up yet');
+  if (!res.ok) throw new Error('Could not run. Try again shortly.');
+  return res.json();
+}
+
+async function loadCB(code) {
+  cbCode = code;
+  try { renderCB(await cbCall({})); } catch { $('cb').hidden = true; }
+}
+
+async function load(code) {
+  if (DEMO) return DEMO_DATA;
+  const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
+  if (res.status === 401) throw new Error('That access code was not recognized.');
+  if (!res.ok) throw new Error('Could not load the dashboard right now. Please try again shortly.');
+  return res.json();
+}
+
+async function show(code, fromLogin) {
+  try { render(await load(code)); store.set(code); if (cbCode !== code) loadCB(code); }
+  catch (e) { store.set(null); if (fromLogin) $('err').textContent = e.message; else signOut(); }
+}
+
+function signOut() {
+  store.set(null); cbCode = null; $('cb').hidden = true; $('dash').style.display = 'none'; $('login').style.display = 'block';
+  $('logout').hidden = true; $('code').value = ''; $('err').textContent = '';
+}
+
+$('login').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('err').textContent = ''; $('go').disabled = true;
+  await show($('code').value.trim(), true); $('go').disabled = false;
+});
+$('refresh').addEventListener('click', () => { const c = store.get(); if (c || DEMO) show(c, false); });
+$('logout').addEventListener('click', signOut);
+setInterval(() => { const c = store.get(); if (c && !document.hidden) show(c, false); }, 5 * 60 * 1000);
+if (DEMO) show('demo', true); else if (store.get()) show(store.get(), false);
+</script>
+</body>
+</html>
