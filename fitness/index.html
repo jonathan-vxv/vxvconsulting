@@ -187,7 +187,8 @@ const store = {
 const S = { sessions: [], insights: null, pass: DEMO ? 'demo' : store.get(), tab: 'dashboard', exercise: null, open: null, busy: '' };
 let D = null;          // figures derived from S.sessions (see derive)
 let draft = null;      // the workout being entered or edited on the Log tab
-let review = null;     // { uncertain: [] } while a journal photo's reading is being checked
+let review = null;     // { uncertain: [], from: 'photo' | 'notes' } while a reading is being checked
+let pasteText = '';    // what is typed in the "paste notes" box on the Log tab
 
 // ---------------------------------------------------------------- dates and numbers
 const pad = (n) => String(n).padStart(2, '0');
@@ -292,9 +293,9 @@ const demo = { sessions: null, insights: { headline: 'Training is steady at thre
 ] } };
 async function demoApi(method, path, body) {
   demo.sessions = demo.sessions || demoSessions();
-  await new Promise((r) => setTimeout(r, path === '/api/photo' || path === '/api/insights' ? 1200 : 150));
+  await new Promise((r) => setTimeout(r, /photo|text|insights/.test(path) ? 1200 : 150));
   if (path === '/api/data') return { sessions: demo.sessions, insights: { ...demo.insights, sessionCount: demo.sessions.length } };
-  if (path === '/api/photo') return { draft: { date: today(), title: 'Push', notes: '', source: 'photo', entries: [
+  if (path === '/api/photo' || path === '/api/text') return { draft: { date: today(), title: 'Push', notes: '', source: 'photo', entries: [
     { kind: 'strength', exercise: 'Bench Press', group: 'chest', note: '', sets: [{ weight: 185, reps: 5 }, { weight: 185, reps: 5 }, { weight: 185, reps: 4 }] },
     { kind: 'strength', exercise: 'Overhead Press', group: 'shoulders', note: '', sets: [{ weight: 105, reps: 6 }, { weight: 105, reps: 6 }] },
     { kind: 'cardio', exercise: 'Run', group: 'cardio', note: 'easy pace', minutes: 20, distance: 2 }] }, uncertain: ['Bench Press: the last set could be 4 or 9 reps'], dateFromPage: false };
@@ -537,15 +538,20 @@ const newEntry = (kind) => (kind === 'cardio' ? { kind, exercise: '', group: 'ca
 function viewLog() {
   if (!S.pass) return `<h1 class="title">Log</h1><div class="card empty"><p style="margin-bottom:16px">This device is view only. Unlock it to add workouts.</p><button class="btn primary" data-act="unlock" type="button">Unlock</button></div>`;
   if (!draft) draft = blank();
-  const reading = S.busy === 'photo', saving = S.busy === 'save';
+  const reading = S.busy === 'photo', readingText = S.busy === 'text', saving = S.busy === 'save';
   const names = D.exercises.map((e) => `<option value="${esc(e.name)}">`).join('');
   return `<h1 class="title">${draft.id ? 'Edit workout' : review ? 'Check the reading' : 'Log a workout'}</h1>
   ${!draft.id && !review ? `<div class="card" style="margin:12px 0">
-      <button class="btn primary big" data-act="photo" type="button" ${reading ? 'disabled' : ''}>${reading ? '<span class="spin"></span> Reading your handwriting…' : icon('camera') + ' Photo of journal page'}</button>
+      <button class="btn primary big" data-act="photo" type="button" ${reading || readingText ? 'disabled' : ''}>${reading ? '<span class="spin"></span> Reading your handwriting…' : icon('camera') + ' Photo of journal page'}</button>
       <p class="hint" style="margin:10px 0 0;text-align:center">${reading ? 'This usually takes 10 to 30 seconds.' : 'Take or choose up to 4 photos of one session. You check the result before it saves.'}</p>
-      <input type="file" id="photoInput" accept="image/*" multiple hidden></div>
-    <p class="sub" style="margin:16px 0 8px">Or enter it by hand:</p>` : ''}
-  ${review ? `<div class="notice"><b>Read from your photo.</b> Compare it with the page and fix anything that is off, then save.${review.uncertain.length ? `<ul>${review.uncertain.map((u) => `<li>${esc(u)}</li>`).join('')}</ul>` : ''}${review.dateFromPage ? '' : '<br>No date was found on the page, so today is filled in.'}</div>` : ''}
+      <input type="file" id="photoInput" accept="image/*" multiple hidden>
+      <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:14px">
+        <label class="f" for="pasteBox">Or paste or type notes</label>
+        <textarea id="pasteBox" maxlength="6000" placeholder="Bench 185 3x5, incline DB 60s 3x10, then 2 mile run in 18 min" ${reading || readingText ? 'disabled' : ''}>${esc(pasteText)}</textarea>
+        <button class="btn" data-act="read-text" type="button" style="width:100%;margin-top:8px" ${reading || readingText ? 'disabled' : ''}>${readingText ? '<span class="spin"></span> Reading your notes…' : 'Read notes'}</button>
+      </div></div>
+    <p class="sub" style="margin:16px 0 8px">Or fill in the form yourself:</p>` : ''}
+  ${review ? `<div class="notice"><b>Read from your ${review.from === 'notes' ? 'notes' : 'photo'}.</b> Compare it with ${review.from === 'notes' ? 'what you wrote' : 'the page'} and fix anything that is off, then save.${review.uncertain.length ? `<ul>${review.uncertain.map((u) => `<li>${esc(u)}</li>`).join('')}</ul>` : ''}${review.dateFromPage ? '' : `<br>No date was found ${review.from === 'notes' ? 'in the notes' : 'on the page'}, so today is filled in.`}</div>` : ''}
   <div id="form">
     <div class="card"><div class="pair">
       <div><label class="f" for="fDate">Date</label><input type="date" id="fDate" data-f="date" value="${esc(draft.date)}" max="${today()}"></div>
@@ -619,10 +625,22 @@ async function readPhotos(files) {
     const images = await Promise.all([...files].slice(0, 4).map(shrink));
     const r = await api('POST', '/api/photo', { images, today: today() });
     draft = { ...r.draft, entries: r.draft.entries.map((e) => ({ ...e })) };
-    review = { uncertain: r.uncertain || [], dateFromPage: r.dateFromPage };
+    review = { uncertain: r.uncertain || [], dateFromPage: r.dateFromPage, from: 'photo' };
     S.busy = ''; render(); window.scrollTo(0, 0);
   } catch (e) {
     S.busy = ''; render(); toast(e.message || 'Could not read that photo');
+  }
+}
+async function readText() {
+  if (pasteText.trim().length < 3) return toast('Paste or type your notes first');
+  S.busy = 'text'; render();
+  try {
+    const r = await api('POST', '/api/text', { text: pasteText, today: today() });
+    draft = { ...r.draft, entries: r.draft.entries.map((e) => ({ ...e })) };
+    review = { uncertain: r.uncertain || [], dateFromPage: r.dateFromPage, from: 'notes' };
+    pasteText = ''; S.busy = ''; render(); window.scrollTo(0, 0);
+  } catch (e) {
+    S.busy = ''; render(); toast(e.message || 'Could not read those notes');
   }
 }
 
@@ -650,6 +668,7 @@ document.addEventListener('click', async (ev) => {
   if (act === 'unlock') return openUnlock();
   if (act === 'insights') return refreshInsights();
   if (act === 'photo') return $('#photoInput').click();
+  if (act === 'read-text') return readText();
   if (act === 'save') return saveDraft();
   if (act === 'cancel') { draft = null; review = null; return render(); }
   if (act === 'edit') { const s = S.sessions.find((x) => x.id === t.dataset.id); draft = JSON.parse(JSON.stringify(s)); review = null; return go('log'); }
@@ -670,6 +689,7 @@ document.addEventListener('click', async (ev) => {
 
 document.addEventListener('input', (ev) => {
   const t = ev.target, f = t.dataset.f;
+  if (t.id === 'pasteBox') { pasteText = t.value; return; }
   if (!f || !draft) return;
   const eEl = t.closest('[data-i]'), sEl = t.closest('[data-j]');
   if (!eEl) draft[f] = t.value;
