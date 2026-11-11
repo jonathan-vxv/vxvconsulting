@@ -385,16 +385,16 @@ function renderCB(d) {
   });
 
   if (d.status === 'none' || (d.status === 'error' && !(d.actions || []).length)) {
-    body.append(el('p', 'cb-msg', d.status === 'none' ? 'No reading yet. It runs Monday and Thursday mornings, or run it now.' : 'The last run did not finish. Try running it again.'));
+    body.append(el('p', 'cb-msg', d.status === 'none' ? 'No reading yet. Click Run now to get one.' : 'The last run did not finish. Try running it again.'));
     foot.append(run); body.append(foot); return;
   }
-  // Runs are Mondays and Thursdays, so a reading up to 4 days old is current; older means a run was missed.
+  // Timed runs are off for now (readings come from Run now), so just say how old the reading is; warn past 4 days.
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Denver' });
   const age = d.date ? Math.round((Date.parse(todayStr) - Date.parse(d.date)) / 864e5) : 0;
   const from = d.date ? new Date(d.date + 'T12:00').toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' }) : '';
   if (d.status === 'error') body.append(el('p', 'cb-stale', 'The latest run did not finish, so these suggestions may be out of date.'));
   else if (age > 4) body.append(el('p', 'cb-stale', 'These suggestions are from ' + from + ' and may be out of date.'));
-  else if (age > 0) body.append(el('p', 'cb-msg cb-from', 'From ' + from + '. Next reading Monday or Thursday morning.'));
+  else if (age > 0) body.append(el('p', 'cb-msg cb-from', 'From ' + from + '. Click Run again for a fresh reading.'));
   if (d.headline) body.append(el('p', 'cb-headline', d.headline));
   if (!(d.actions || []).length) body.append(el('p', 'cb-msg', 'Nothing stood out in the numbers this morning.'));
 
