@@ -339,7 +339,7 @@ function demoSessions() {
 }
 const demo = { sessions: null, insights: { headline: 'Training is steady at three to four sessions a week and your main lifts are still climbing.', generatedAt: new Date().toISOString(), sessionCount: 0, suggestions: [
   { coach: 'Dan Go', category: 'progression', title: 'Add 5 lb to your squat next leg day', detail: 'You have hit every rep at your current weight for two sessions running, so a small jump is due. Heavy compound lifts a few times a week are the core of his approach to getting lean.' },
-  { coach: 'Peter Attia', category: 'conditioning', title: 'Add one zone 2 session a week', detail: 'Your log has one short run most weeks. From a healthspan view, a steady 30 to 45 minutes at a pace where you can still talk builds the aerobic base everything else sits on.' },
+  { coach: 'Peter Attia', category: 'conditioning', title: 'Turn your weekly run into intervals', detail: 'Your log has one short run most weeks, so time is the limit on your cardio. From a healthspan view, with that little time, hard intervals such as 4 minutes hard and 4 easy do more for your VO2 max than a dedicated easy zone 2 session.' },
   { coach: 'Andrew Huberman', category: 'balance', title: 'Add a second shoulder exercise', detail: 'Shoulders get about half the weekly sets that chest and back do. Lateral raises after overhead press would even that out.' },
   { coach: 'Tim Ferriss', category: 'consistency', title: 'Protect the Saturday run', detail: 'It is the session you skip most often. A shorter, easier run still keeps the habit.' },
 ] } };
@@ -350,7 +350,7 @@ async function demoApi(method, path, body) {
   if (path === '/api/wod' && body.feedback) return { wod: { ...S.wod, revised: (S.wod.revised || 0) + 1, title: S.wod.title.replace(/ \(revised\)$/, '') + ' (revised)', rationale: `Changed as you asked ("${body.feedback}"). ` + S.wod.rationale.replace(/^Changed as you asked \(.*?\)\. /, '') } };
   if (path === '/api/wod') return { wod: { date: today(), generatedAt: new Date().toISOString(), minutes: body.minutes, place: body.place, title: body.place === 'home' ? 'Bodyweight circuit + brisk walk' : 'Upper body push + zone 2',
     focus: body.place === 'home' ? 'full body, aerobic base' : 'chest, shoulders, aerobic base',
-    rationale: 'You trained legs two days ago and pulled yesterday, so pushing muscles are the freshest. The session ends with steady zone 2 work, which an Attia-style healthspan view puts at the base of everything, and keeps the lifting to a few heavy sets in the way Dan Go favours for busy weeks.',
+    rationale: 'You trained legs two days ago and pulled yesterday, so pushing muscles are the freshest. The session ends with easy aerobic work to add weekly cardio volume without much fatigue, in line with an Attia-style healthspan view, and keeps the lifting to a few heavy sets in the way Dan Go favours for busy weeks.',
     warmup: '5 minutes easy on the bike, then two light sets of the first lift.', cooldown: 'Two minutes of easy walking and a chest stretch.',
     entries: body.place === 'home'
       ? [{ kind: 'strength', exercise: 'Push-Up', group: 'chest', note: 'Rest 60 seconds. Stop two reps short of failure.', sets: [{ weight: 0, reps: 15 }, { weight: 0, reps: 15 }, { weight: 0, reps: 12 }] },
