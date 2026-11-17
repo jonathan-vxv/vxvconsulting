@@ -133,6 +133,12 @@
     </section>
 
     <section class="sec">
+      <h2>What it takes</h2>
+      <div class="tiles" id="need"></div>
+      <p class="how" id="needNote" style="margin:10px 2px 0"></p>
+    </section>
+
+    <section class="sec">
       <h2 id="chartHead">Forecast cash balance</h2>
       <div class="card">
         <div id="chart"></div>
@@ -171,7 +177,7 @@
         </div>
 
         <details class="more">
-          <summary>Turn recurring payments on or off</summary>
+          <summary>Turn payments and expected receipts on or off</summary>
           <div class="commit-list" id="commitList"></div>
         </details>
 
@@ -301,8 +307,16 @@ function parseCommitments(rows) {
   })).filter((c) => c.name && !isNaN(c.amount) && c.amount !== 0);
 }
 
-const parseInflows = (rows) => body(rows, 'Date').map((r) => ({ date: parseDate(r[0]), amount: money(r[1]), source: cell(r[2]) || 'Expected deposit' }))
-  .filter((x) => x.date != null && !isNaN(x.amount));
+// Upcoming_Inflows / Deposit_Log rows. Type "One-time" = an extra receipt on top of the average; anything else is a payout.
+function parseInflows(rows) {
+  rows = rows || [];
+  const head = (rows.find((r) => cell(r[0]).toLowerCase() === 'date') || []).map((v) => cell(v).toLowerCase());
+  const col = (name, dflt) => { const i = head.indexOf(name); return i < 0 ? dflt : i; };
+  const cA = col('amount', 1), cS = col('source', 2), cT = col('type', -1);
+  return body(rows, 'Date').map((r, i) => ({ id: 'i' + i, date: parseDate(r[0]), amount: money(r[cA]), source: cell(r[cS]) || 'Expected deposit',
+    oneTime: cT >= 0 && /one/i.test(cell(r[cT])) }))
+    .filter((x) => x.date != null && !isNaN(x.amount));
+}
 
 // ---- Calendar ----
 function bizDay(t, hol) { const w = dow(t); return w !== 0 && w !== 6 && !hol.has(key(t)); }
@@ -368,12 +382,14 @@ function forecast(base, sc) {
     }
   }
   // Committed inflows, then the expected average after the last committed date.
-  const committed = inflows.filter((x) => x.date > start && x.date <= end);
+  const upcoming = inflows.filter((x) => x.date > start && x.date <= end && !sc.off.has(x.id));
+  const committed = upcoming.filter((x) => !x.oneTime), extras = upcoming.filter((x) => x.oneTime);
   committed.forEach((x) => put(x.date, 'in', x.source, x.amount, 'committed'));
+  extras.forEach((x) => put(x.date, 'in', x.source + ' (one-time)', x.amount, 'committed'));
   const lastCommitted = committed.length ? Math.max(...committed.map((x) => x.date)) : start;
   const avg = weekdayAverages(deposits, start, settings.histWeeks, hol);
-  const factor = 1 + sc.inflowPct / 100;
-  const expFor = (t) => (avg ? avg.avg[dow(t)] : settings.fallback);
+  const factor = sc.flatRate != null ? 1 : 1 + sc.inflowPct / 100;
+  const expFor = (t) => (sc.flatRate != null ? sc.flatRate : avg ? avg.avg[dow(t)] : settings.fallback);
   let carry = 0;                                     // a weekday bank holiday's deposits arrive on the next business day
   for (const d of days) {
     if (d.date <= lastCommitted) continue;
@@ -390,7 +406,18 @@ function forecast(base, sc) {
 
   let bal = cash.value;
   for (const d of days) { bal += d.in - d.out; d.bal = bal; }
-  return { days, start, end, lastCommitted, avg, committed };
+  return { days, start, end, lastCommitted, avg, committed, extras };
+}
+
+// Smallest flat expected deposit per business day that keeps every day's balance at or above `floor`,
+// with everything else in the scenario unchanged. null when no deposit rate can do it (the dip comes first).
+function requiredRate(sc, floor) {
+  const low = (rate) => Math.min(...forecast(BASE, { ...sc, flatRate: rate }).days.map((d) => d.bal));
+  if (low(0) >= floor) return 0;
+  let lo = 0, hi = 50000;
+  if (low(hi) < floor) return null;
+  for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (low(mid) >= floor) hi = mid; else lo = mid; }
+  return hi;
 }
 
 // ---- State ----
@@ -445,6 +472,21 @@ function render() {
     tile('Next payroll', next ? short(next.date) : 'None', next ? `${fmt(SC.payroll)} · balance after ${fmt(next.bal)}` : 'No payroll in this window', next && next.bal < 0 ? 'neg' : ''),
     tile('Ending balance', fmt(days[days.length - 1].bal), dayName(days[days.length - 1].date), days[days.length - 1].bal < cushion ? 'neg' : ''),
   );
+
+  f.extras.forEach((x) => note('warn', `Includes a one-time receipt of <b>${fmt(x.amount)}</b> from ${esc(x.source)} on ${dayName(x.date)}. Turn it off under Scenarios to see the forecast without it.`));
+
+  // What it takes: weekly deposits needed to stay above $0 and above the cushion.
+  const curRate = (f.avg ? f.avg.flat : BASE.settings.fallback) * (1 + SC.inflowPct / 100);
+  const r0 = requiredRate(SC, 0), rC = requiredRate(SC, cushion);
+  const vs = (r) => { if (!curRate) return ''; const p = Math.round((r / curRate - 1) * 100); return p === 0 ? ' · same as the current rate' : ` · ${Math.abs(p)}% ${p > 0 ? 'above' : 'below'} the current rate`; };
+  const needTile = (label, r) => r == null ? tile(label, 'Not reachable', 'The shortfall comes before expected deposits start', 'neg')
+    : tile(label, fmt(r * 5) + '/wk', `${fmt(r)} per business day${vs(r)}`, r > curRate ? 'neg' : 'pos');
+  const need = $('need'); need.replaceChildren(
+    tile('Deposits expected now', fmt(curRate * 5) + '/wk', `${fmt(curRate)} per business day${SC.inflowPct ? ` (scenario ${SC.inflowPct > 0 ? '+' : ''}${SC.inflowPct}%)` : f.avg ? ', last ' + f.avg.weeks.toFixed(0) + ' weeks' : ', fallback'}`),
+    needTile('Needed to stay above $0', r0),
+    needTile(`Needed to stay above ${fmt(cushion)}`, rC));
+  const firstExp = days.find((d) => d.date > f.lastCommitted && bizDay(d.date, BASE.settings.holidays));
+  $('needNote').textContent = `Weekly deposits needed from ${firstExp ? short(firstExp.date) : short(f.end)} through ${short(f.end)} to keep every day's balance above that line, with everything else as entered (payroll ${fmt(SC.payroll)}, commitments, ${fmt(SC.variable)} a weekday of variable spend, committed payouts and one-time items).`;
 
   drawChart(f, cushion);
   $('keyCushion').textContent = 'Cash cushion ' + fmt(cushion);
@@ -555,6 +597,8 @@ function drawHow(f) {
     f.committed.length ? `Money in through ${short(f.lastCommitted)}: only the ${f.committed.length} committed deposit${f.committed.length > 1 ? 's' : ''} on Upcoming_Inflows.` : 'Money in: no committed deposits are entered on Upcoming_Inflows.',
     f.avg ? `Money in after that: a flat ${fmt(f.avg.flat)} every business day, the average received per business day over the last ${f.avg.weeks.toFixed(1)} weeks of Deposit_Log. Weekends get nothing, and a bank holiday's expected deposits arrive on the next business day.`
       : `Money in after that: a flat ${fmt(s.fallback)} per weekday from Forecast_Settings, until Deposit_Log has enough history for a trailing ${s.histWeeks}-week average. A bank holiday's amount arrives on the next business day.`,
+    'One-time receipts (Type "One-time" on Upcoming_Inflows) are added on top of the expected deposits on their date.',
+    '"What it takes" finds the lowest flat deposit per business day, applied after the committed payouts, that keeps the balance above $0 (or the cushion) on every day of the forecast.',
     `Money out: every active row on the Commitments tab. Monthly items on the 29th–31st fall on the last day in shorter months, and anything due on a weekend or bank holiday moves to the next business day.`,
     BASE.payroll.avg4 ? `Payroll: ${fmt(SC.payroll)} per run. The last four runs on Payroll_Log averaged ${fmt(BASE.payroll.avg4)}.` : `Payroll: ${fmt(SC.payroll)} per run.`,
     'Jobber payouts already have the Jobber Capital holdback taken out, so the loan repayment is built into the inflows.',
@@ -575,8 +619,14 @@ function syncControls() {
   BASE.commitments.forEach((c) => {
     const lab = el('label'), cb = el('input'); cb.type = 'checkbox'; cb.checked = !SC.off.has(c.id);
     cb.addEventListener('change', () => { cb.checked ? SC.off.delete(c.id) : SC.off.add(c.id); render(); });
-    const when = c.freq.startsWith('month') ? `the ${ordinal(parseInt(c.day, 10))}` : c.freq;
+    const when = c.freq.startsWith('month') ? `the ${ordinal(parseInt(c.day, 10))}` : c.freq.startsWith('once') && parseDate(c.day) != null ? 'once, ' + short(parseDate(c.day)) : c.freq;
     lab.append(cb, el('span', '', `${c.name} · ${when}`), el('span', 'amt', fmt(/payroll/i.test(c.category) ? SC.payroll : c.amount)));
+    list.append(lab);
+  });
+  BASE.inflows.filter((x) => x.date > BASE.cash.date).forEach((x) => {
+    const lab = el('label'), cb = el('input'); cb.type = 'checkbox'; cb.checked = !SC.off.has(x.id);
+    cb.addEventListener('change', () => { cb.checked ? SC.off.delete(x.id) : SC.off.add(x.id); render(); });
+    lab.append(cb, el('span', '', `Money in: ${x.source} · ${short(x.date)}${x.oneTime ? ' (one-time)' : ''}`), el('span', 'amt pos', '+' + fmt(x.amount)));
     list.append(lab);
   });
   drawOneoffs();
