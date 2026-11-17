@@ -62,7 +62,6 @@
   #chart text { font-size: 11px; fill: var(--ink-dim); font-variant-numeric: tabular-nums; }
   .key { display: flex; gap: 18px; flex-wrap: wrap; font-size: .78rem; color: var(--ink-dim); margin-top: 10px; }
   .key span::before { content: ''; display: inline-block; width: 16px; height: 0; vertical-align: middle; margin-right: 6px; border-top: 2px solid var(--blue); }
-  .key .k-cushion::before { border-top: 2px dashed var(--neg); }
   .key .k-pay::before { width: 8px; height: 8px; border: 0; border-radius: 50%; background: var(--ink-dim); }
   #tip { position: fixed; z-index: 30; pointer-events: none; background: var(--ink); color: #fff; font-size: .78rem; line-height: 1.4;
     padding: 8px 10px; border-radius: 8px; transform: translate(-50%, calc(-100% - 10px)); display: none; max-width: 280px; }
@@ -142,7 +141,7 @@
       <h2 id="chartHead">Forecast cash balance</h2>
       <div class="card">
         <div id="chart"></div>
-        <div class="key"><span>Forecast balance at end of day</span><span class="k-cushion" id="keyCushion">Cash cushion</span><span class="k-pay">Payroll</span></div>
+        <div class="key"><span>Forecast balance at end of day</span><span class="k-pay">Payroll</span></div>
       </div>
     </section>
 
@@ -164,11 +163,6 @@
             <label for="sVar">Variable spend per weekday</label>
             <input type="number" id="sVar" min="0" step="50">
             <div class="hint">Materials, fuel, card spend: anything not on the commitment list.</div>
-          </div>
-          <div class="ctl">
-            <label for="sCushion">Cash cushion</label>
-            <input type="number" id="sCushion" min="0" step="500">
-            <div class="hint">Days below this are flagged.</div>
           </div>
           <div class="ctl">
             <label for="sWeeks">Forecast length</label>
@@ -287,11 +281,10 @@ function parsePayroll(rows) {
 }
 
 function parseSettings(rows) {
-  const s = { weeks: 8, cushion: 10000, fallback: 0, histWeeks: 8, variable: 0, holidays: new Set() };
+  const s = { weeks: 8, fallback: 0, histWeeks: 8, variable: 0, holidays: new Set() };
   for (const r of body(rows, 'Setting')) {
     const k = cell(r[0]).toLowerCase(), v = r[1];
     if (k.startsWith('forecast weeks')) s.weeks = money(v) || s.weeks;
-    else if (k.startsWith('minimum cash')) s.cushion = isNaN(money(v)) ? s.cushion : money(v);
     else if (k.startsWith('fallback inflow')) s.fallback = isNaN(money(v)) ? 0 : money(v);
     else if (k.startsWith('inflow history')) s.histWeeks = money(v) || s.histWeeks;
     else if (k.startsWith('variable spend')) s.variable = isNaN(money(v)) ? 0 : money(v);
@@ -420,10 +413,25 @@ function requiredRate(sc, floor) {
   return hi;
 }
 
+// Run-rate break-even: the flat deposit per business day at which regular money in matches regular money out
+// over the forecast, so cash grows from there. One-time items (sheet "Once"/"One-time" rows and page one-offs) are left out.
+function growRate(sc) {
+  const off = new Set(sc.off);
+  BASE.inflows.forEach((x) => { if (x.oneTime) off.add(x.id); });
+  BASE.commitments.forEach((c) => { if (c.freq.startsWith('once')) off.add(c.id); });
+  const s = { ...sc, off, oneoffs: [] };
+  const net = (rate) => { const d = forecast(BASE, { ...s, flatRate: rate }).days; return d[d.length - 1].bal - BASE.cash.value; };
+  if (net(0) >= 0) return 0;
+  let lo = 0, hi = 50000;
+  if (net(hi) < 0) return null;
+  for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (net(mid) >= 0) hi = mid; else lo = mid; }
+  return hi;
+}
+
 // ---- State ----
 let BASE = null, FETCHED = null;
-let SC = null;                                       // scenario: {inflowPct, payroll, variable, cushion, weeks, off:Set, oneoffs:[]}
-const defaults = () => ({ inflowPct: 0, payroll: BASE.payrollDefault, variable: BASE.settings.variable, cushion: BASE.settings.cushion,
+let SC = null;                                       // scenario: {inflowPct, payroll, variable, weeks, off:Set, oneoffs:[]}
+const defaults = () => ({ inflowPct: 0, payroll: BASE.payrollDefault, variable: BASE.settings.variable,
   weeks: BASE.settings.weeks, off: new Set(), oneoffs: [] });
 
 function buildBase(d) {
@@ -444,9 +452,9 @@ function tile(label, value, note, cls) {
 }
 
 function render() {
-  const f = forecast(BASE, SC), days = f.days, cushion = SC.cushion;
+  const f = forecast(BASE, SC), days = f.days;
   const low = days.reduce((a, d) => (d.bal < a.bal ? d : a), days[0]);
-  const firstBelow = days.find((d) => d.bal < cushion), firstNeg = days.find((d) => d.bal < 0);
+  const firstNeg = days.find((d) => d.bal < 0);
   const payDays = days.filter((d) => d.outs.some((o) => o.kind === 'payroll'));
   const next = payDays[0];
 
@@ -467,42 +475,42 @@ function render() {
   // Tiles
   const tiles = $('tiles'); tiles.replaceChildren();
   tiles.append(
-    tile('Lowest balance', fmt(low.bal), 'on ' + dayName(low.date), low.bal < cushion ? 'neg' : ''),
-    tile('Below cushion', firstBelow ? short(firstBelow.date) : 'Not forecast', firstBelow ? `First day under ${fmt(cushion)}` : `Stays above ${fmt(cushion)}`, firstBelow ? 'neg' : 'pos'),
+    tile('Lowest balance', fmt(low.bal), 'on ' + dayName(low.date), low.bal < 0 ? 'neg' : ''),
+    tile('Below $0', firstNeg ? short(firstNeg.date) : 'Not forecast', firstNeg ? 'First day the balance goes negative' : 'Stays positive throughout', firstNeg ? 'neg' : 'pos'),
     tile('Next payroll', next ? short(next.date) : 'None', next ? `${fmt(SC.payroll)} · balance after ${fmt(next.bal)}` : 'No payroll in this window', next && next.bal < 0 ? 'neg' : ''),
-    tile('Ending balance', fmt(days[days.length - 1].bal), dayName(days[days.length - 1].date), days[days.length - 1].bal < cushion ? 'neg' : ''),
+    tile('Ending balance', fmt(days[days.length - 1].bal), dayName(days[days.length - 1].date), days[days.length - 1].bal < 0 ? 'neg' : ''),
   );
 
   f.extras.forEach((x) => note('warn', `Includes a one-time receipt of <b>${fmt(x.amount)}</b> from ${esc(x.source)} on ${dayName(x.date)}. Turn it off under Scenarios to see the forecast without it.`));
 
-  // What it takes: weekly deposits needed to stay above $0 and above the cushion.
+  // What it takes: weekly deposits needed to stay above $0, and to cover regular spending so cash grows.
   const curRate = (f.avg ? f.avg.flat : BASE.settings.fallback) * (1 + SC.inflowPct / 100);
-  const r0 = requiredRate(SC, 0), rC = requiredRate(SC, cushion);
+  const r0 = requiredRate(SC, 0), rG = growRate(SC);
   const vs = (r) => { if (!curRate) return ''; const p = Math.round((r / curRate - 1) * 100); return p === 0 ? ' · same as the current rate' : ` · ${Math.abs(p)}% ${p > 0 ? 'above' : 'below'} the current rate`; };
   const needTile = (label, r) => r == null ? tile(label, 'Not reachable', 'The shortfall comes before expected deposits start', 'neg')
     : tile(label, fmt(r * 5) + '/wk', `${fmt(r)} per business day${vs(r)}`, r > curRate ? 'neg' : 'pos');
   const need = $('need'); need.replaceChildren(
     tile('Deposits expected now', fmt(curRate * 5) + '/wk', `${fmt(curRate)} per business day${SC.inflowPct ? ` (scenario ${SC.inflowPct > 0 ? '+' : ''}${SC.inflowPct}%)` : f.avg ? ', last ' + f.avg.weeks.toFixed(0) + ' weeks' : ', fallback'}`),
     needTile('Needed to stay above $0', r0),
-    needTile(`Needed to stay above ${fmt(cushion)}`, rC));
+    rG == null ? tile('Needed to grow cash', 'Not reachable', 'Regular spending exceeds any realistic deposit rate', 'neg')
+      : tile('Needed to grow cash', fmt(rG * 5) + '/wk', `${fmt(rG)} per business day${vs(rG)} · deposits above this add to cash every week`, rG > curRate ? 'neg' : 'pos'));
   const firstExp = days.find((d) => d.date > f.lastCommitted && bizDay(d.date, BASE.settings.holidays));
-  $('needNote').textContent = `Weekly deposits needed from ${firstExp ? short(firstExp.date) : short(f.end)} through ${short(f.end)} to keep every day's balance above that line, with everything else as entered (payroll ${fmt(SC.payroll)}, commitments, ${fmt(SC.variable)} a weekday of variable spend, committed payouts and one-time items).`;
+  $('needNote').textContent = `"Needed to stay above $0" is the weekly deposit level from ${firstExp ? short(firstExp.date) : short(f.end)} through ${short(f.end)} that keeps every day's balance positive, counting everything as entered, including one-time items. "Needed to grow cash" is the run rate where regular deposits cover regular spending (payroll ${fmt(SC.payroll)}, commitments and ${fmt(SC.variable)} a weekday of variable spend), leaving out one-time items; above it, cash builds over time.`;
 
-  drawChart(f, cushion);
-  $('keyCushion').textContent = 'Cash cushion ' + fmt(cushion);
+  drawChart(f);
   drawWeekly(f);
   drawDaily(f);
   drawHow(f);
   const d0 = defaults();
-  const changed = SC.inflowPct !== 0 || SC.payroll !== d0.payroll || SC.variable !== d0.variable || SC.cushion !== d0.cushion || SC.weeks !== d0.weeks || SC.off.size || SC.oneoffs.length;
+  const changed = SC.inflowPct !== 0 || SC.payroll !== d0.payroll || SC.variable !== d0.variable || SC.weeks !== d0.weeks || SC.off.size || SC.oneoffs.length;
   $('changed').textContent = changed ? 'Scenario: these numbers differ from the workbook' : '';
 }
 
-function drawChart(f, cushion) {
+function drawChart(f) {
   const box = $('chart'), days = f.days;
   const W = Math.max(320, Math.round(box.clientWidth) || 900), H = W < 600 ? 240 : 300, L = 56, R = 14, T = 14, B = 34, ns = 'http://www.w3.org/2000/svg', mk = (t, a) => { const e = document.createElementNS(ns, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
   const pts = [{ date: f.start, bal: BASE.cash.value }, ...days];
-  const vals = pts.map((p) => p.bal).concat([cushion, 0]);
+  const vals = pts.map((p) => p.bal).concat([0]);
   let lo = Math.min(...vals), hi = Math.max(...vals);
   const span = hi - lo || 1, stepRaw = span / 5, mag = Math.pow(10, Math.floor(Math.log10(stepRaw)));
   const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= stepRaw);
@@ -522,8 +530,6 @@ function drawChart(f, cushion) {
     svg.append(mk('line', { x1: x(t), x2: x(t), y1: H - B, y2: H - B + 4, stroke: '#b8b3a1' }));
     const lab = mk('text', { x: x(t), y: H - B + 18, 'text-anchor': 'middle' }); lab.textContent = short(t); svg.append(lab);
   }
-  // Cushion
-  svg.append(mk('line', { x1: L, x2: W - R, y1: y(cushion), y2: y(cushion), stroke: 'var(--neg)', 'stroke-width': 1.5, 'stroke-dasharray': '5 4' }));
   // Balance: a step line, since the balance changes at each day's transactions.
   let d = `M${x(pts[0].date).toFixed(1)} ${y(pts[0].bal).toFixed(1)}`;
   for (let i = 1; i < pts.length; i++) d += ` H${x(pts[i].date).toFixed(1)} V${y(pts[i].bal).toFixed(1)}`;
@@ -534,7 +540,7 @@ function drawChart(f, cushion) {
     svg.append(mk('circle', { cx: x(p.date), cy: y(p.bal), r: 4, fill: 'var(--ink-dim)', stroke: 'var(--bg-alt)', 'stroke-width': 2 }));
   // Low point
   const low = days.reduce((a, p) => (p.bal < a.bal ? p : a), days[0]);
-  svg.append(mk('circle', { cx: x(low.date), cy: y(low.bal), r: 5, fill: low.bal < cushion ? 'var(--neg)' : 'var(--blue)', stroke: 'var(--bg-alt)', 'stroke-width': 2 }));
+  svg.append(mk('circle', { cx: x(low.date), cy: y(low.bal), r: 5, fill: low.bal < 0 ? 'var(--neg)' : 'var(--blue)', stroke: 'var(--bg-alt)', 'stroke-width': 2 }));
   const lt = mk('text', { x: Math.min(Math.max(x(low.date), L + 40), W - R - 40), y: Math.min(y(low.bal) + 20, H - B - 4), 'text-anchor': 'middle', style: 'font-weight:600;fill:var(--ink)' });
   lt.textContent = 'Low ' + fmt(low.bal); svg.append(lt);
 
@@ -572,7 +578,7 @@ function drawWeekly(f) {
     const out = wk.reduce((a, d) => a + d.out, 0) - pay, low = Math.min(...wk.map((d) => d.bal)), endBal = wk[wk.length - 1].bal;
     const tr = el('tr');
     tr.append(el('td', '', short(wk[0].date) + ' – ' + short(wk[wk.length - 1].date)), el('td', '', fmt(inn)), el('td', '', pay ? fmt(pay) : '–'),
-      el('td', '', fmt(out)), el('td', inn - pay - out < 0 ? 'neg' : '', fmt(inn - pay - out)), el('td', low < SC.cushion ? 'neg' : '', fmt(low)), el('td', endBal < SC.cushion ? 'neg' : '', fmt(endBal)));
+      el('td', '', fmt(out)), el('td', inn - pay - out < 0 ? 'neg' : '', fmt(inn - pay - out)), el('td', low < 0 ? 'neg' : '', fmt(low)), el('td', endBal < 0 ? 'neg' : '', fmt(endBal)));
     t.append(tr);
   }
 }
@@ -585,7 +591,7 @@ function drawDaily(f) {
     const what = [...d.ins.map((o) => o.label + (o.kind === 'committed' ? ' (committed)' : '')), ...d.outs.map((o) => o.label + ' ' + fmt(o.amt))]
       .filter((s, i, a) => a.indexOf(s) === i).join(' · ');
     tr.append(el('td', '', dayName(d.date)), el('td', '', d.in ? fmt(d.in) : ''), el('td', '', d.out ? fmt(d.out) : ''),
-      el('td', d.bal < SC.cushion ? 'neg' : '', fmt(d.bal)), el('td', 'items', what || (bizDay(d.date, BASE.settings.holidays) ? '' : 'No bank activity')));
+      el('td', d.bal < 0 ? 'neg' : '', fmt(d.bal)), el('td', 'items', what || (bizDay(d.date, BASE.settings.holidays) ? '' : 'No bank activity')));
     t.append(tr);
   }
 }
@@ -598,7 +604,7 @@ function drawHow(f) {
     f.avg ? `Money in after that: a flat ${fmt(f.avg.flat)} every business day, the average received per business day over the last ${f.avg.weeks.toFixed(1)} weeks of Deposit_Log. Weekends get nothing, and a bank holiday's expected deposits arrive on the next business day.`
       : `Money in after that: a flat ${fmt(s.fallback)} per weekday from Forecast_Settings, until Deposit_Log has enough history for a trailing ${s.histWeeks}-week average. A bank holiday's amount arrives on the next business day.`,
     'One-time receipts (Type "One-time" on Upcoming_Inflows) are added on top of the expected deposits on their date.',
-    '"What it takes" finds the lowest flat deposit per business day, applied after the committed payouts, that keeps the balance above $0 (or the cushion) on every day of the forecast.',
+    '"What it takes" finds the lowest flat deposit per business day, applied after the committed payouts, that keeps the balance above $0 on every day of the forecast. "Needed to grow cash" is the rate at which regular deposits cover regular spending over the forecast, leaving out one-time items.',
     `Money out: every active row on the Commitments tab. Monthly items on the 29th–31st fall on the last day in shorter months, and anything due on a weekend or bank holiday moves to the next business day.`,
     BASE.payroll.avg4 ? `Payroll: ${fmt(SC.payroll)} per run. The last four runs on Payroll_Log averaged ${fmt(BASE.payroll.avg4)}.` : `Payroll: ${fmt(SC.payroll)} per run.`,
     'Jobber payouts already have the Jobber Capital holdback taken out, so the loan repayment is built into the inflows.',
@@ -609,8 +615,7 @@ function drawHow(f) {
 // ---- Scenario controls ----
 function syncControls() {
   $('sInflow').value = SC.inflowPct; $('oInflow').textContent = (SC.inflowPct > 0 ? '+' : '') + SC.inflowPct + '%';
-  $('sPayroll').value = Math.round(SC.payroll); $('sVar').value = SC.variable; $('sCushion').value = SC.cushion;
-  if (![...$('sWeeks').options].some((o) => +o.value === SC.weeks)) $('sWeeks').append(new Option(SC.weeks + ' weeks', SC.weeks));
+  $('sPayroll').value = Math.round(SC.payroll); $('sVar').value = SC.variable;  if (![...$('sWeeks').options].some((o) => +o.value === SC.weeks)) $('sWeeks').append(new Option(SC.weeks + ' weeks', SC.weeks));
   $('sWeeks').value = SC.weeks;
   const base = BASE.settings;
   $('hInflow').textContent = 'Adjusts the expected average, not committed payouts.';
@@ -647,7 +652,6 @@ const num = (id, fallback) => { const v = parseFloat($(id).value); return isNaN(
 $('sInflow').addEventListener('input', () => { SC.inflowPct = +$('sInflow').value; $('oInflow').textContent = (SC.inflowPct > 0 ? '+' : '') + SC.inflowPct + '%'; render(); });
 $('sPayroll').addEventListener('input', () => { SC.payroll = num('sPayroll', SC.payroll); render(); });
 $('sVar').addEventListener('input', () => { SC.variable = num('sVar', SC.variable); render(); });
-$('sCushion').addEventListener('input', () => { SC.cushion = num('sCushion', SC.cushion); render(); });
 $('sWeeks').addEventListener('change', () => { SC.weeks = +$('sWeeks').value; render(); });
 $('reset').addEventListener('click', () => { SC = defaults(); syncControls(); render(); });
 $('oAdd').addEventListener('click', () => {
@@ -669,7 +673,7 @@ function demoData() {
   return { fetchedAt: new Date().toISOString(),
     cash: [['Date', 'Relay Bank Account', 'Bank of Bozeman Account', 'Bill Credit Card'], ['Type →', 'Bank', 'Bank', 'Credit Card'], [fmtD(t0), '$4,100.00', '$7,259.00', '$647.00']],
     payroll: [['Pay date', 'Gross wages', 'Employer taxes', 'Benefits', 'Total employer cost'], ['10/16/2026', '', '', '', '$16,312'], ['10/30/2026', '', '', '', '$19,070'], ['11/13/2026', '', '', '', '$20,956']],
-    settings: [['Setting', 'Value'], ['Forecast weeks', '8'], ['Minimum cash cushion', '$10,000'], ['Fallback inflow per weekday', '$1,800'], ['Inflow history weeks', '8'], ['Variable spend per weekday', '$400'],
+    settings: [['Setting', 'Value'], ['Forecast weeks', '8'], ['Fallback inflow per weekday', '$1,800'], ['Inflow history weeks', '8'], ['Variable spend per weekday', '$400'],
       ['Bank holiday', '11/26/2026'], ['Bank holiday', '12/25/2026'], ['Bank holiday', '1/1/2027']],
     commitments: [['Description', 'Amount', 'Frequency', 'Day', 'Starts', 'Ends', 'Category'],
       C('Payroll', 19070, 'Every 2 weeks', '11/13/2026', 'Payroll'), C('Rent: 6881 Maltese', 2201.35, 'Monthly', 30, 'Rent'), C('Rent: 160 Mactavish', 2628.95, 'Monthly', 30, 'Rent'),
