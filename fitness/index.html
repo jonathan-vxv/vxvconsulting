@@ -238,6 +238,7 @@ const S = { sessions: [], insights: null, wod: null, pass: DEMO ? 'demo' : store
 let D = null;          // figures derived from S.sessions (see derive)
 let draft = null;      // the workout being entered or edited on the Log tab
 let review = null;     // { uncertain: [], from: 'photo' | 'notes' } while a reading is being checked
+let wodFeedback = '';  // what is typed in the "change this plan" box on the workout card
 let pasteText = '';    // what is typed in the "paste notes" box on the Log tab
 
 // ---------------------------------------------------------------- dates and numbers
@@ -346,6 +347,7 @@ async function demoApi(method, path, body) {
   demo.sessions = demo.sessions || demoSessions();
   await new Promise((r) => setTimeout(r, /photo|text|insights|wod/.test(path) ? 1200 : 150));
   if (path === '/api/data') return { sessions: demo.sessions, insights: { ...demo.insights, sessionCount: demo.sessions.length }, wod: null };
+  if (path === '/api/wod' && body.feedback) return { wod: { ...S.wod, revised: (S.wod.revised || 0) + 1, title: S.wod.title.replace(/ \(revised\)$/, '') + ' (revised)', rationale: `Changed as you asked ("${body.feedback}"). ` + S.wod.rationale.replace(/^Changed as you asked \(.*?\)\. /, '') } };
   if (path === '/api/wod') return { wod: { date: today(), generatedAt: new Date().toISOString(), minutes: body.minutes, place: body.place, title: body.place === 'home' ? 'Bodyweight circuit + brisk walk' : 'Upper body push + zone 2',
     focus: body.place === 'home' ? 'full body, aerobic base' : 'chest, shoulders, aerobic base',
     rationale: 'You trained legs two days ago and pulled yesterday, so pushing muscles are the freshest. The session ends with steady zone 2 work, which an Attia-style healthspan view puts at the base of everything, and keeps the lifting to a few heavy sets in the way Dan Go favours for busy weeks.',
@@ -559,7 +561,13 @@ function wodHtml() {
     ${w.warmup ? `<p class="part"><b>Warm-up.</b> ${esc(w.warmup)}</p>` : ''}
     <div style="margin-top:10px;border-top:1px solid var(--line);padding-top:6px">${w.entries.map((e) => `<div class="line"><span><b>${esc(e.exercise)}</b>${e.note ? `<br><span style="color:var(--muted);font-size:.8rem">${esc(e.note)}</span>` : ''}</span><span class="sets" style="white-space:nowrap">${e.kind === 'cardio' ? cardioText(e) : esc(setsText(e.sets))}</span></div>`).join('')}</div>
     ${w.cooldown ? `<p class="part"><b>Cool-down.</b> ${esc(w.cooldown)}</p>` : ''}
-    ${S.pass ? '<button class="btn primary" data-act="wod-start" type="button" style="width:100%;margin-top:14px">Start this workout</button>' : ''}
+    ${S.pass ? `<button class="btn primary" data-act="wod-start" type="button" style="width:100%;margin-top:14px" ${S.busy === 'wod' ? 'disabled' : ''}>Start this workout</button>
+    <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+      <label class="f" for="wodFeedback">Want changes?</label>
+      <div class="row"><input class="grow" id="wodFeedback" maxlength="500" value="${esc(wodFeedback)}" placeholder="Swap squats for leg press, add core, make it harder" ${S.busy === 'wod' ? 'disabled' : ''}>
+        <button class="btn" data-act="wod-revise" type="button" style="flex:none" ${S.busy === 'wod' ? 'disabled' : ''}>${S.busy === 'wod' ? '<span class="spin"></span>' : 'Revise'}</button></div>
+      ${S.busy === 'wod' ? '<p class="hint" style="margin:8px 0 0">Revising, 10 to 30 seconds…</p>' : ''}
+    </div>` : ''}
     <p class="hint" style="margin:10px 0 0">Planned by Claude from your log and profile. General fitness guidance, not medical advice.</p>`;
 }
 
@@ -751,6 +759,7 @@ document.addEventListener('click', async (ev) => {
   if (act === 'insights') return refreshInsights();
   if (act === 'profile') return openProfile();
   if (act === 'wod') return openWod();
+  if (act === 'wod-revise') return reviseWod();
   if (act === 'wod-start') {
     draft = { date: today(), title: S.wod.title, notes: '', source: 'manual', entries: JSON.parse(JSON.stringify(S.wod.entries)) };
     review = { uncertain: [], dateFromPage: true, from: 'plan' };
@@ -779,6 +788,7 @@ document.addEventListener('click', async (ev) => {
 document.addEventListener('input', (ev) => {
   const t = ev.target, f = t.dataset.f;
   if (t.id === 'pasteBox') { pasteText = t.value; return; }
+  if (t.id === 'wodFeedback') { wodFeedback = t.value; return; }
   if (!f || !draft) return;
   const eEl = t.closest('[data-i]'), sEl = t.closest('[data-j]');
   if (!eEl) draft[f] = t.value;
@@ -853,6 +863,15 @@ $('#wodForm').addEventListener('submit', async (ev) => {
   } catch (e) { $('#wodErr').textContent = e.message; $('#wodErr').hidden = false; }
   btn.disabled = false; btn.textContent = 'Plan it';
 });
+
+async function reviseWod() {
+  if (wodFeedback.trim().length < 3) return toast('Say what you would like changed first');
+  S.busy = 'wod'; render();
+  try { S.wod = (await api('POST', '/api/wod', { today: today(), feedback: wodFeedback.trim() })).wod; wodFeedback = ''; toast('Plan revised'); }
+  catch (e) { toast(e.message); }
+  S.busy = ''; render();
+}
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.target.id === 'wodFeedback') { ev.preventDefault(); reviseWod(); } });
 
 async function openProfile() {
   const dlg = $('#profileDlg'), box = $('#profileText'), err = $('#profileErr');
