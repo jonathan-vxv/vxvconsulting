@@ -371,10 +371,15 @@ function forecast(base, sc) {
   const lastCommitted = committed.length ? Math.max(...committed.map((x) => x.date)) : start;
   const avg = weekdayAverages(deposits, start, settings.histWeeks, hol);
   const factor = 1 + sc.inflowPct / 100;
+  const expFor = (t) => (avg ? avg.avg[dow(t)] : settings.fallback);
+  let carry = 0;                                     // a weekday bank holiday's deposits arrive on the next business day
   for (const d of days) {
-    if (d.date <= lastCommitted || !bizDay(d.date, hol)) continue;
-    const exp = avg ? avg.avg[dow(d.date)] : settings.fallback;
-    if (exp > 0) put(d.date, 'in', 'Expected deposits', exp * factor, 'expected');
+    if (d.date <= lastCommitted) continue;
+    const w = dow(d.date);
+    if (!bizDay(d.date, hol)) { if (w !== 0 && w !== 6) carry += expFor(d.date); continue; }
+    const exp = expFor(d.date) + carry;
+    if (exp > 0) put(d.date, 'in', carry ? 'Expected deposits (incl. holiday)' : 'Expected deposits', exp * factor, 'expected');
+    carry = 0;
     if (sc.variable > 0) put(d.date, 'out', 'Variable spend', sc.variable, 'variable');
   }
   for (const d of days) if (d.date <= lastCommitted && bizDay(d.date, hol) && sc.variable > 0) put(d.date, 'out', 'Variable spend', sc.variable, 'variable');
@@ -546,8 +551,8 @@ function drawHow(f) {
   const pts = [
     `Starting point: available cash (bank accounts minus the Bill card) from the latest Cash_Log row, ${short(BASE.cash.date)}.`,
     f.committed.length ? `Money in through ${short(f.lastCommitted)}: only the ${f.committed.length} committed deposit${f.committed.length > 1 ? 's' : ''} on Upcoming_Inflows.` : 'Money in: no committed deposits are entered on Upcoming_Inflows.',
-    f.avg ? `Money in after that: the average received on each weekday (Mon–Fri) over the last ${f.avg.weeks.toFixed(1)} weeks of Deposit_Log. Weekends and bank holidays get nothing.`
-      : `Money in after that: a flat ${fmt(s.fallback)} per weekday from Forecast_Settings, until Deposit_Log has enough history for a trailing ${s.histWeeks}-week average.`,
+    f.avg ? `Money in after that: the average received on each weekday (Mon–Fri) over the last ${f.avg.weeks.toFixed(1)} weeks of Deposit_Log. Weekends get nothing, and a bank holiday's expected deposits arrive on the next business day.`
+      : `Money in after that: a flat ${fmt(s.fallback)} per weekday from Forecast_Settings, until Deposit_Log has enough history for a trailing ${s.histWeeks}-week average. A bank holiday's amount arrives on the next business day.`,
     `Money out: every active row on the Commitments tab. Monthly items on the 29th–31st fall on the last day in shorter months, and anything due on a weekend or bank holiday moves to the next business day.`,
     BASE.payroll.avg4 ? `Payroll: ${fmt(SC.payroll)} per run. The last four runs on Payroll_Log averaged ${fmt(BASE.payroll.avg4)}.` : `Payroll: ${fmt(SC.payroll)} per run.`,
     'Jobber payouts already have the Jobber Capital holdback taken out, so the loan repayment is built into the inflows.',
