@@ -413,19 +413,20 @@ function requiredRate(sc, floor) {
   return hi;
 }
 
-// Run-rate break-even: the flat deposit per business day at which regular money in matches regular money out
-// over the forecast, so cash grows from there. One-time items (sheet "Once"/"One-time" rows and page one-offs) are left out.
-function growRate(sc) {
-  const off = new Set(sc.off);
-  BASE.inflows.forEach((x) => { if (x.oneTime) off.add(x.id); });
-  BASE.commitments.forEach((c) => { if (c.freq.startsWith('once')) off.add(c.id); });
-  const s = { ...sc, off, oneoffs: [] };
-  const net = (rate) => { const d = forecast(BASE, { ...s, flatRate: rate }).days; return d[d.length - 1].bal - BASE.cash.value; };
-  if (net(0) >= 0) return 0;
-  let lo = 0, hi = 50000;
-  if (net(hi) < 0) return null;
-  for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (net(mid) >= 0) hi = mid; else lo = mid; }
-  return hi;
+// Run-rate break-even, normalized to an average week so every recurring item counts at its full rate no matter
+// where its dates fall: payroll every 2 weeks = ½ a run a week, monthly = 12/52 a week, plus 5 weekdays of variable spend.
+// One-time items are left out. Deposits above this rate add to cash; below it, cash shrinks.
+function growRate(sc, start, end) {
+  let payroll = 0, fixed = 0;
+  for (const c of BASE.commitments) {
+    if (sc.off.has(c.id) || c.freq.startsWith('once')) continue;
+    if ((c.ends != null && c.ends < start) || (c.starts != null && c.starts > end)) continue;
+    const isPay = /payroll/i.test(c.category) || /payroll/i.test(c.name), amt = isPay ? sc.payroll : c.amount;
+    const perWeek = c.freq.startsWith('month') ? (amt * 12) / 52 : /week/.test(c.freq) ? (/2|two|bi/.test(c.freq) ? amt / 2 : amt) : 0;
+    if (isPay) payroll += perWeek; else fixed += perWeek;
+  }
+  const variable = sc.variable * 5;
+  return { perDay: (payroll + fixed + variable) / 5, payroll, fixed, variable };
 }
 
 // ---- State ----
@@ -485,17 +486,16 @@ function render() {
 
   // What it takes: weekly deposits needed to stay above $0, and to cover regular spending so cash grows.
   const curRate = (f.avg ? f.avg.flat : BASE.settings.fallback) * (1 + SC.inflowPct / 100);
-  const r0 = requiredRate(SC, 0), rG = growRate(SC);
+  const r0 = requiredRate(SC, 0), g = growRate(SC, f.start, f.end), rG = g.perDay;
   const vs = (r) => { if (!curRate) return ''; const p = Math.round((r / curRate - 1) * 100); return p === 0 ? ' · same as the current rate' : ` · ${Math.abs(p)}% ${p > 0 ? 'above' : 'below'} the current rate`; };
   const needTile = (label, r) => r == null ? tile(label, 'Not reachable', 'The shortfall comes before expected deposits start', 'neg')
     : tile(label, fmt(r * 5) + '/wk', `${fmt(r)} per business day${vs(r)}`, r > curRate ? 'neg' : 'pos');
   const need = $('need'); need.replaceChildren(
     tile('Deposits expected now', fmt(curRate * 5) + '/wk', `${fmt(curRate)} per business day${SC.inflowPct ? ` (scenario ${SC.inflowPct > 0 ? '+' : ''}${SC.inflowPct}%)` : f.avg ? ', last ' + f.avg.weeks.toFixed(0) + ' weeks' : ', fallback'}`),
     needTile('Needed to stay above $0', r0),
-    rG == null ? tile('Needed to grow cash', 'Not reachable', 'Regular spending exceeds any realistic deposit rate', 'neg')
-      : tile('Needed to grow cash', fmt(rG * 5) + '/wk', `${fmt(rG)} per business day${vs(rG)} · deposits above this add to cash every week`, rG > curRate ? 'neg' : 'pos'));
+    tile('Needed to grow cash', fmt(rG * 5) + '/wk', `${fmt(rG)} per business day${vs(rG)} · deposits above this add to cash every week`, rG > curRate ? 'neg' : 'pos'));
   const firstExp = days.find((d) => d.date > f.lastCommitted && bizDay(d.date, BASE.settings.holidays));
-  $('needNote').textContent = `"Needed to stay above $0" is the weekly deposit level from ${firstExp ? short(firstExp.date) : short(f.end)} through ${short(f.end)} that keeps every day's balance positive, counting everything as entered, including one-time items. "Needed to grow cash" is the run rate where regular deposits cover regular spending (payroll ${fmt(SC.payroll)}, commitments and ${fmt(SC.variable)} a weekday of variable spend), leaving out one-time items; above it, cash builds over time.`;
+  $('needNote').textContent = `"Needed to stay above $0" is the weekly deposit level from ${firstExp ? short(firstExp.date) : short(f.end)} through ${short(f.end)} that keeps every day's balance positive, counting everything as entered, including one-time items. "Needed to grow cash" is what an average week of regular spending costs: payroll ${fmt(g.payroll)} + other commitments ${fmt(g.fixed)} + variable spend ${fmt(g.variable)} = ${fmt(g.payroll + g.fixed + g.variable)} a week (monthly items at 12/52 of a month, one-time items left out). Deposits above it build cash over time.`;
 
   drawChart(f);
   drawWeekly(f);
@@ -604,7 +604,7 @@ function drawHow(f) {
     f.avg ? `Money in after that: a flat ${fmt(f.avg.flat)} every business day, the average received per business day over the last ${f.avg.weeks.toFixed(1)} weeks of Deposit_Log. Weekends get nothing, and a bank holiday's expected deposits arrive on the next business day.`
       : `Money in after that: a flat ${fmt(s.fallback)} per weekday from Forecast_Settings, until Deposit_Log has enough history for a trailing ${s.histWeeks}-week average. A bank holiday's amount arrives on the next business day.`,
     'One-time receipts (Type "One-time" on Upcoming_Inflows) are added on top of the expected deposits on their date.',
-    '"What it takes" finds the lowest flat deposit per business day, applied after the committed payouts, that keeps the balance above $0 on every day of the forecast. "Needed to grow cash" is the rate at which regular deposits cover regular spending over the forecast, leaving out one-time items.',
+    '"What it takes" finds the lowest flat deposit per business day, applied after the committed payouts, that keeps the balance above $0 on every day of the forecast. "Needed to grow cash" is the cost of an average week of regular spending (payroll, every recurring commitment at its full weekly rate, and variable spend), leaving out one-time items.',
     `Money out: every active row on the Commitments tab. Monthly items on the 29th–31st fall on the last day in shorter months, and anything due on a weekend or bank holiday moves to the next business day.`,
     BASE.payroll.avg4 ? `Payroll: ${fmt(SC.payroll)} per run. The last four runs on Payroll_Log averaged ${fmt(BASE.payroll.avg4)}.` : `Payroll: ${fmt(SC.payroll)} per run.`,
     'Jobber payouts already have the Jobber Capital holdback taken out, so the loan repayment is built into the inflows.',
