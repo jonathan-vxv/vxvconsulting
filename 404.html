@@ -11,6 +11,8 @@
     var p = location.pathname;
     if (/^\/brm\/?$/i.test(p) || /^\/brm\/index\.html$/i.test(p)) {
       location.replace('/BRM/' + location.search + location.hash);
+    } else if (/^\/brm\/forecast\/?$/i.test(p) || /^\/brm\/forecast\/index\.html$/i.test(p)) {
+      location.replace('/BRM/forecast/' + location.search + location.hash);
     } else if (p !== '/fitness/' && (/^\/fitness\/?$/i.test(p) || /^\/fitness\/index\.html$/i.test(p))) {
       location.replace('/fitness/' + location.search + location.hash);
     }
