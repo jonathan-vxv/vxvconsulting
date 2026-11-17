@@ -124,6 +124,14 @@
   .sugg { padding: 12px 0; border-top: 1px solid var(--line); }
   .sugg h3 { font-size: .92rem; font-weight: 600; margin: 4px 0 2px; }
   .sugg p { font-size: .88rem; color: var(--ink-2); }
+  .opts { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .opts label { flex: 1; position: relative; cursor: pointer; }
+  .opts input { position: absolute; opacity: 0; width: 1px; height: 1px; min-height: 0; padding: 0; }
+  .opts span { display: block; text-align: center; border: 1px solid var(--line); border-radius: 10px; padding: 11px 6px; font-weight: 600; font-size: .92rem; white-space: nowrap; }
+  .opts input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .opts input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .wod .part { font-size: .88rem; color: var(--ink-2); margin-top: 8px; }
+  .wod .part b { color: var(--ink); }
   .sugg .who { font-size: .78rem; font-weight: 600; color: var(--ink-2); margin-right: 6px; }
   .bal { display: grid; grid-template-columns: 78px minmax(0, 1fr) 34px; gap: 10px; align-items: center; padding: 5px 0; font-size: .85rem; }
   .bal .track { height: 12px; border-radius: 4px; background: var(--sunk); overflow: hidden; }
@@ -169,6 +177,35 @@
     </div>
   </form>
 </dialog>
+<dialog id="wodDlg">
+  <form method="dialog" id="wodForm">
+    <h2 style="font-size:1.1rem;margin-bottom:12px">Plan today's workout</h2>
+    <label class="f">How much time do you have?</label>
+    <div class="opts">
+      <label><input type="radio" name="minutes" value="20"><span>20 min</span></label>
+      <label><input type="radio" name="minutes" value="30"><span>30</span></label>
+      <label><input type="radio" name="minutes" value="45"><span>45</span></label>
+      <label><input type="radio" name="minutes" value="60"><span>60</span></label>
+      <label><input type="radio" name="minutes" value="90"><span>90</span></label>
+    </div>
+    <label class="f">Where are you?</label>
+    <div class="opts">
+      <label><input type="radio" name="place" value="gym"><span>At the gym</span></label>
+      <label><input type="radio" name="place" value="home"><span>At home</span></label>
+    </div>
+    <div id="wodEquipWrap" style="margin-bottom:14px" hidden>
+      <label class="f" for="wodEquip">What do you have at home?</label>
+      <input id="wodEquip" maxlength="300" placeholder="Dumbbells up to 40 lb, pull-up bar, bands">
+    </div>
+    <label class="f" for="wodRequest">Anything to focus on or avoid? (optional)</label>
+    <input id="wodRequest" maxlength="300" placeholder="Sore shoulder, want some cardio">
+    <p class="err" id="wodErr" hidden></p>
+    <div class="row" style="margin-top:16px;justify-content:flex-end">
+      <button class="btn" type="button" id="wodCancel">Cancel</button>
+      <button class="btn primary" type="submit" id="wodGo">Plan it</button>
+    </div>
+  </form>
+</dialog>
 <dialog id="profileDlg">
   <form method="dialog" id="profileForm">
     <h2 style="font-size:1.1rem;margin-bottom:4px">About me</h2>
@@ -197,7 +234,7 @@ const store = {
   get() { try { return localStorage.getItem('fit-pass') || ''; } catch { return ''; } },
   set(v) { try { v ? localStorage.setItem('fit-pass', v) : localStorage.removeItem('fit-pass'); } catch {} },
 };
-const S = { sessions: [], insights: null, pass: DEMO ? 'demo' : store.get(), tab: 'dashboard', exercise: null, open: null, busy: '' };
+const S = { sessions: [], insights: null, wod: null, pass: DEMO ? 'demo' : store.get(), tab: 'dashboard', exercise: null, open: null, busy: '' };
 let D = null;          // figures derived from S.sessions (see derive)
 let draft = null;      // the workout being entered or edited on the Log tab
 let review = null;     // { uncertain: [], from: 'photo' | 'notes' } while a reading is being checked
@@ -307,8 +344,19 @@ const demo = { sessions: null, insights: { headline: 'Training is steady at thre
 ] } };
 async function demoApi(method, path, body) {
   demo.sessions = demo.sessions || demoSessions();
-  await new Promise((r) => setTimeout(r, /photo|text|insights/.test(path) ? 1200 : 150));
-  if (path === '/api/data') return { sessions: demo.sessions, insights: { ...demo.insights, sessionCount: demo.sessions.length } };
+  await new Promise((r) => setTimeout(r, /photo|text|insights|wod/.test(path) ? 1200 : 150));
+  if (path === '/api/data') return { sessions: demo.sessions, insights: { ...demo.insights, sessionCount: demo.sessions.length }, wod: null };
+  if (path === '/api/wod') return { wod: { date: today(), generatedAt: new Date().toISOString(), minutes: body.minutes, place: body.place, title: body.place === 'home' ? 'Bodyweight circuit + brisk walk' : 'Upper body push + zone 2',
+    focus: body.place === 'home' ? 'full body, aerobic base' : 'chest, shoulders, aerobic base',
+    rationale: 'You trained legs two days ago and pulled yesterday, so pushing muscles are the freshest. The session ends with steady zone 2 work, which an Attia-style healthspan view puts at the base of everything, and keeps the lifting to a few heavy sets in the way Dan Go favours for busy weeks.',
+    warmup: '5 minutes easy on the bike, then two light sets of the first lift.', cooldown: 'Two minutes of easy walking and a chest stretch.',
+    entries: body.place === 'home'
+      ? [{ kind: 'strength', exercise: 'Push-Up', group: 'chest', note: 'Rest 60 seconds. Stop two reps short of failure.', sets: [{ weight: 0, reps: 15 }, { weight: 0, reps: 15 }, { weight: 0, reps: 12 }] },
+         { kind: 'strength', exercise: 'Plank', group: 'core', note: 'Reps are seconds.', sets: [{ weight: 0, reps: 45 }, { weight: 0, reps: 45 }] },
+         { kind: 'cardio', exercise: 'Brisk Walk', group: 'cardio', note: 'A pace where you can still talk.', minutes: 15, distance: 0 }]
+      : [{ kind: 'strength', exercise: 'Bench Press', group: 'chest', note: 'Rest 2 to 3 minutes. Same weight as last time, aim for every rep.', sets: [{ weight: 195, reps: 5 }, { weight: 195, reps: 5 }, { weight: 195, reps: 5 }] },
+         { kind: 'strength', exercise: 'Overhead Press', group: 'shoulders', note: 'Rest 2 minutes.', sets: [{ weight: 110, reps: 6 }, { weight: 110, reps: 6 }, { weight: 110, reps: 6 }] },
+         { kind: 'cardio', exercise: 'Bike', group: 'cardio', note: 'Zone 2: a pace where you can still talk.', minutes: 15, distance: 0 }] } };
   if (path === '/api/photo' || path === '/api/text') return { draft: { date: today(), title: 'Push', notes: '', source: 'photo', entries: [
     { kind: 'strength', exercise: 'Bench Press', group: 'chest', note: '', sets: [{ weight: 185, reps: 5 }, { weight: 185, reps: 5 }, { weight: 185, reps: 4 }] },
     { kind: 'strength', exercise: 'Overhead Press', group: 'shoulders', note: '', sets: [{ weight: 105, reps: 6 }, { weight: 105, reps: 6 }] },
@@ -462,7 +510,7 @@ function render() {
 }
 
 function viewDashboard() {
-  if (!S.sessions.length) return `<div class="card empty"><h2 style="font-size:1.2rem;color:var(--ink);margin-bottom:6px">No workouts yet</h2>
+  if (!S.sessions.length) return `${S.pass ? `<div class="card wod" style="margin-bottom:12px">${wodHtml()}</div>` : ''}<div class="card empty"><h2 style="font-size:1.2rem;color:var(--ink);margin-bottom:6px">No workouts yet</h2>
     <p style="margin-bottom:16px">Log your first session, or take a photo of your journal page.</p><button class="btn primary" data-tab="log" type="button">Log a workout</button></div>`;
   const wk = iso(monday(new Date())), prevWk = iso(addDays(monday(new Date()), -7));
   const thisWeek = S.sessions.filter((s) => s.date >= wk).length, lastWeek = S.sessions.filter((s) => s.date >= prevWk && s.date < wk).length;
@@ -489,6 +537,7 @@ function viewDashboard() {
     <div class="tile"><div class="k">Records, 30 days</div><div class="v">${prs.length}</div><div class="n">${prs[0] ? 'latest: ' + esc(prs[0].name) : 'none yet'}</div></div>
   </div>
   <div class="grid two">
+    <div class="card span2 wod">${wodHtml()}</div>
     <div class="card span2">${suggestionsHtml()}</div>
     <div class="card"><h2>Consistency</h2><p class="hint">Each square is a day. Darker means more sets.</p><div data-chart="heat"></div></div>
     <div class="card"><h2>Weight lifted per week</h2><p class="hint">Total pounds (weight × reps) across all lifts.</p><div data-chart="volume"></div></div>
@@ -497,6 +546,21 @@ function viewDashboard() {
     <div class="card"><h2>Recent records</h2><p class="hint">Best estimated one-rep max for a lift, beaten.</p>
       ${D.prs.length ? [...D.prs].reverse().slice(0, 6).map((p) => `<div class="line"><span><b>${esc(p.name)}</b><br><span class="meta" style="color:var(--muted);font-size:.8rem">${fmt(p.date, { month: 'short', day: 'numeric' })}</span></span><span class="sets">${p.set.weight}×${p.set.reps}<br><span class="up">+${num(p.gain) === '0' ? '<1' : num(p.gain)} lb est. max</span></span></div>`).join('') : '<p class="meta" style="color:var(--muted);font-size:.88rem">Records appear once you repeat a lift and beat your earlier best.</p>'}</div>
   </div>`;
+}
+
+function wodHtml() {
+  const w = S.wod && S.wod.date === today() ? S.wod : null;
+  const btn = S.pass ? `<button class="btn ${w ? 'small' : 'primary'}" data-act="wod" type="button">${w ? 'New plan' : "Plan today's workout"}</button>` : '';
+  if (!w) return `<div class="row wrap"><div class="grow"><h2>Workout of the day</h2><p class="hint" style="margin:0">${S.pass ? 'Built from your recent sessions, your goals and the time you have.' : 'Unlock to plan a workout.'}</p></div>${btn}</div>`;
+  return `<div class="row wrap" style="align-items:flex-start"><div class="grow"><h2>Workout of the day</h2>
+    <p class="hint">${w.minutes} min · ${w.place === 'home' ? 'at home' : 'at the gym'}${w.focus ? ' · ' + esc(w.focus) : ''}</p></div>${btn}</div>
+    <p style="font-size:1.1rem;font-weight:700;letter-spacing:-.01em">${esc(w.title)}</p>
+    <p class="part">${esc(w.rationale)}</p>
+    ${w.warmup ? `<p class="part"><b>Warm-up.</b> ${esc(w.warmup)}</p>` : ''}
+    <div style="margin-top:10px;border-top:1px solid var(--line);padding-top:6px">${w.entries.map((e) => `<div class="line"><span><b>${esc(e.exercise)}</b>${e.note ? `<br><span style="color:var(--muted);font-size:.8rem">${esc(e.note)}</span>` : ''}</span><span class="sets" style="white-space:nowrap">${e.kind === 'cardio' ? cardioText(e) : esc(setsText(e.sets))}</span></div>`).join('')}</div>
+    ${w.cooldown ? `<p class="part"><b>Cool-down.</b> ${esc(w.cooldown)}</p>` : ''}
+    ${S.pass ? '<button class="btn primary" data-act="wod-start" type="button" style="width:100%;margin-top:14px">Start this workout</button>' : ''}
+    <p class="hint" style="margin:10px 0 0">Planned by Claude from your log and profile. General fitness guidance, not medical advice.</p>`;
 }
 
 function suggestionsHtml() {
@@ -558,7 +622,7 @@ function viewLog() {
   if (!draft) draft = blank();
   const reading = S.busy === 'photo', readingText = S.busy === 'text', saving = S.busy === 'save';
   const names = D.exercises.map((e) => `<option value="${esc(e.name)}">`).join('');
-  return `<h1 class="title">${draft.id ? 'Edit workout' : review ? 'Check the reading' : 'Log a workout'}</h1>
+  return `<h1 class="title">${draft.id ? 'Edit workout' : review ? (review.from === 'plan' ? "Today's workout" : 'Check the reading') : 'Log a workout'}</h1>
   ${!draft.id && !review ? `<div class="card" style="margin:12px 0">
       <button class="btn primary big" data-act="photo" type="button" ${reading || readingText ? 'disabled' : ''}>${reading ? '<span class="spin"></span> Reading your handwriting…' : icon('camera') + ' Photo of journal page'}</button>
       <p class="hint" style="margin:10px 0 0;text-align:center">${reading ? 'This usually takes 10 to 30 seconds.' : 'Take or choose up to 4 photos of one session. You check the result before it saves.'}</p>
@@ -569,7 +633,7 @@ function viewLog() {
         <button class="btn" data-act="read-text" type="button" style="width:100%;margin-top:8px" ${reading || readingText ? 'disabled' : ''}>${readingText ? '<span class="spin"></span> Reading your notes…' : 'Read notes'}</button>
       </div></div>
     <p class="sub" style="margin:16px 0 8px">Or fill in the form yourself:</p>` : ''}
-  ${review ? `<div class="notice"><b>Read from your ${review.from === 'notes' ? 'notes' : 'photo'}.</b> Compare it with ${review.from === 'notes' ? 'what you wrote' : 'the page'} and fix anything that is off, then save.${review.uncertain.length ? `<ul>${review.uncertain.map((u) => `<li>${esc(u)}</li>`).join('')}</ul>` : ''}${review.dateFromPage ? '' : `<br>No date was found ${review.from === 'notes' ? 'in the notes' : 'on the page'}, so today is filled in.`}</div>` : ''}
+  ${review && review.from === 'plan' ? `<div class="notice"><b>Today's plan is loaded.</b> As you go, change the weights and reps to what you actually did, add or remove sets, then save.</div>` : review ? `<div class="notice"><b>Read from your ${review.from === 'notes' ? 'notes' : 'photo'}.</b> Compare it with ${review.from === 'notes' ? 'what you wrote' : 'the page'} and fix anything that is off, then save.${review.uncertain.length ? `<ul>${review.uncertain.map((u) => `<li>${esc(u)}</li>`).join('')}</ul>` : ''}${review.dateFromPage ? '' : `<br>No date was found ${review.from === 'notes' ? 'in the notes' : 'on the page'}, so today is filled in.`}</div>` : ''}
   <div id="form">
     <div class="card"><div class="pair">
       <div><label class="f" for="fDate">Date</label><input type="date" id="fDate" data-f="date" value="${esc(draft.date)}" max="${today()}"></div>
@@ -686,6 +750,12 @@ document.addEventListener('click', async (ev) => {
   if (act === 'unlock') return openUnlock();
   if (act === 'insights') return refreshInsights();
   if (act === 'profile') return openProfile();
+  if (act === 'wod') return openWod();
+  if (act === 'wod-start') {
+    draft = { date: today(), title: S.wod.title, notes: '', source: 'manual', entries: JSON.parse(JSON.stringify(S.wod.entries)) };
+    review = { uncertain: [], dateFromPage: true, from: 'plan' };
+    return go('log');
+  }
   if (act === 'photo') return $('#photoInput').click();
   if (act === 'read-text') return readText();
   if (act === 'save') return saveDraft();
@@ -756,6 +826,34 @@ $('#unlockForm').addEventListener('submit', async (ev) => {
   go_.disabled = false;
 });
 
+// The planner's questions; the last answers are remembered on this device.
+const prefs = {
+  get() { try { return JSON.parse(localStorage.getItem('fit-wod')) || {}; } catch { return {}; } },
+  set(v) { try { localStorage.setItem('fit-wod', JSON.stringify(v)); } catch {} },
+};
+const wodPlace = () => ($('#wodForm [name="place"]:checked') || {}).value;
+function openWod() {
+  const p = prefs.get(), f = $('#wodForm');
+  ($(`[name="minutes"][value="${p.minutes || 45}"]`, f) || $('[name="minutes"][value="45"]', f)).checked = true;
+  $(`[name="place"][value="${p.place === 'home' ? 'home' : 'gym'}"]`, f).checked = true;
+  $('#wodEquip').value = p.equipment || ''; $('#wodRequest').value = '';
+  $('#wodEquipWrap').hidden = wodPlace() !== 'home'; $('#wodErr').hidden = true;
+  $('#wodDlg').showModal();
+}
+$('#wodForm').addEventListener('change', () => ($('#wodEquipWrap').hidden = wodPlace() !== 'home'));
+$('#wodCancel').addEventListener('click', () => $('#wodDlg').close());
+$('#wodForm').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const btn = $('#wodGo'), minutes = +$('#wodForm [name="minutes"]:checked').value, place = wodPlace(), equipment = $('#wodEquip').value.trim();
+  prefs.set({ minutes, place, equipment });
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Planning, 10 to 30 seconds…'; $('#wodErr').hidden = true;
+  try {
+    S.wod = (await api('POST', '/api/wod', { today: today(), minutes, place, equipment: place === 'home' ? equipment : '', request: $('#wodRequest').value.trim() })).wod;
+    $('#wodDlg').close(); go('dashboard');
+  } catch (e) { $('#wodErr').textContent = e.message; $('#wodErr').hidden = false; }
+  btn.disabled = false; btn.textContent = 'Plan it';
+});
+
 async function openProfile() {
   const dlg = $('#profileDlg'), box = $('#profileText'), err = $('#profileErr');
   err.hidden = true; box.value = ''; box.disabled = true; dlg.showModal();
@@ -777,7 +875,7 @@ addEventListener('hashchange', () => { const t = location.hash.slice(1); if (TAB
 (async function start() {
   const h = location.hash.slice(1); if (TABS.some(([id]) => id === h)) S.tab = h;
   renderChrome();
-  try { const d = await api('GET', '/api/data'); setData(d.sessions, d.insights); render(); }
+  try { const d = await api('GET', '/api/data'); S.wod = d.wod || null; setData(d.sessions, d.insights); render(); }
   catch (e) { $('#view').innerHTML = `<div class="card empty"><p style="margin-bottom:14px">${esc(e.message)}</p><button class="btn" type="button" onclick="location.reload()">Try again</button></div>`; }
 })();
 </script>
