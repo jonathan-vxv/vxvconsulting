@@ -332,7 +332,8 @@ function dueDates(c, from, to) {
   return out.filter((t) => t >= from && t <= to && (c.starts == null || t >= c.starts) && (c.ends == null || t <= c.ends));
 }
 
-// Expected inflow per weekday (Mon..Fri) from the trailing window of Deposit_Log.
+// Expected inflow per business day from the trailing window of Deposit_Log: one flat rate
+// (total received / business days in the window), applied the same to every weekday.
 function weekdayAverages(deposits, start, weeks, hol) {
   if (!deposits.length) return null;
   const from = addDays(start, -7 * weeks + 1);
@@ -341,10 +342,11 @@ function weekdayAverages(deposits, start, weeks, hol) {
   const earliest = Math.max(from, Math.min(...inWin.map((d) => d.date)));
   const spanDays = Math.round((start - earliest) / DAY) + 1;
   if (spanDays < 14) return null;                    // under two weeks of history is too thin to average
-  const tot = [0, 0, 0, 0, 0, 0, 0], cnt = [0, 0, 0, 0, 0, 0, 0];
-  for (const d of inWin) { let t = d.date; if (!bizDay(t, hol)) t = nextBiz(t, hol); tot[dow(t)] += d.amount; }
-  for (let t = earliest; t <= start; t = addDays(t, 1)) if (bizDay(t, hol)) cnt[dow(t)]++;
-  return { avg: tot.map((s, i) => (cnt[i] ? s / cnt[i] : 0)), weeks: spanDays / 7 };
+  const total = inWin.reduce((a, d) => a + d.amount, 0);
+  let n = 0;
+  for (let t = earliest; t <= start; t = addDays(t, 1)) if (bizDay(t, hol)) n++;
+  const flat = n ? total / n : 0;
+  return { avg: [0, flat, flat, flat, flat, flat, 0], flat, weeks: spanDays / 7 };
 }
 
 // ---- The forecast ----
@@ -551,7 +553,7 @@ function drawHow(f) {
   const pts = [
     `Starting point: available cash (bank accounts minus the Bill card) from the latest Cash_Log row, ${short(BASE.cash.date)}.`,
     f.committed.length ? `Money in through ${short(f.lastCommitted)}: only the ${f.committed.length} committed deposit${f.committed.length > 1 ? 's' : ''} on Upcoming_Inflows.` : 'Money in: no committed deposits are entered on Upcoming_Inflows.',
-    f.avg ? `Money in after that: the average received on each weekday (Mon–Fri) over the last ${f.avg.weeks.toFixed(1)} weeks of Deposit_Log. Weekends get nothing, and a bank holiday's expected deposits arrive on the next business day.`
+    f.avg ? `Money in after that: a flat ${fmt(f.avg.flat)} every business day, the average received per business day over the last ${f.avg.weeks.toFixed(1)} weeks of Deposit_Log. Weekends get nothing, and a bank holiday's expected deposits arrive on the next business day.`
       : `Money in after that: a flat ${fmt(s.fallback)} per weekday from Forecast_Settings, until Deposit_Log has enough history for a trailing ${s.histWeeks}-week average. A bank holiday's amount arrives on the next business day.`,
     `Money out: every active row on the Commitments tab. Monthly items on the 29th–31st fall on the last day in shorter months, and anything due on a weekend or bank holiday moves to the next business day.`,
     BASE.payroll.avg4 ? `Payroll: ${fmt(SC.payroll)} per run. The last four runs on Payroll_Log averaged ${fmt(BASE.payroll.avg4)}.` : `Payroll: ${fmt(SC.payroll)} per run.`,
