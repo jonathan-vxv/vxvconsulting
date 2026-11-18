@@ -1,0 +1,15 @@
+# Cloudflare Pages project for clbuilders.vxvconsulting.com (C&L Builders payment waterfall).
+# public/_worker.js handles every request, so nothing is served without the password.
+name = "vxv-clbuilders"
+pages_build_output_dir = "public"
+compatibility_date = "2025-01-01"
+
+# Secrets are NOT set here. Production: Cloudflare dashboard -> Workers & Pages -> vxv-clbuilders ->
+# Settings -> Variables and Secrets (or `npx wrangler pages secret put NAME`). Local: copy .env.example to .env.
+
+# Wrong-password counters shared across Cloudflare instances. Create with
+#   npx wrangler kv namespace create clbuilders-rate-limit
+# then paste the printed id below and uncomment. Without it, counting is per instance (weaker).
+# [[kv_namespaces]]
+# binding = "RATE_LIMIT"
+# id = "PASTE_ID_HERE"

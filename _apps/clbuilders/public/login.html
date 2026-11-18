@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>Payment Waterfall | VXV Consulting</title>
+<style>
+  :root { --bg: #faf9f5; --ink: #23221e; --ink-dim: #77746a; --blue: #0071e3; --blue-dim: #0058b0; --line: #ddd9cc; --neg: #b3261e; color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.47; -webkit-font-smoothing: antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  header { border-bottom: 1px solid var(--line); }
+  header div { max-width: 980px; margin: 0 auto; padding: 0 16px; height: 48px; display: flex; align-items: center; }
+  .brand { font-weight: 600; font-size: .95rem; color: var(--ink); text-decoration: none; }
+  form { max-width: 360px; margin: 72px auto; padding: 0 16px; text-align: center; }
+  h1 { font-size: 1.8rem; letter-spacing: -.02em; margin: 0 0 8px; }
+  p { color: var(--ink-dim); margin: 0 0 24px; }
+  input { width: 100%; font: inherit; font-size: 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; margin-bottom: 12px; }
+  input:focus { outline: 2px solid var(--blue); outline-offset: 1px; }
+  .err { color: var(--neg); font-size: .85rem; min-height: 1.3em; margin: 0 0 12px; }
+  button { font: inherit; cursor: pointer; background: var(--blue); color: #fff; border: 0; border-radius: 980px; padding: 12px 24px; font-size: 1rem; width: 100%; }
+  button:hover { background: var(--blue-dim); }
+</style>
+</head>
+<body>
+<header><div><a class="brand" href="https://vxvconsulting.com/">VXV Consulting</a></div></header>
+<form method="post" action="/login">
+  <h1>Payment waterfall</h1>
+  <p>C&amp;L Builders. Enter the password to continue.</p>
+  <input name="password" type="password" placeholder="Password" autocomplete="current-password" autocapitalize="none" required autofocus>
+  <div class="err" role="alert"><!--ERR--></div>
+  <button type="submit">Sign in</button>
+</form>
+</body>
+</html>

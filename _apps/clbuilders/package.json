@@ -1,0 +1,13 @@
+{
+  "name": "vxv-clbuilders",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev --port 8788",
+    "deploy": "wrangler pages deploy --branch main",
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.160.0"
+  }
+}
