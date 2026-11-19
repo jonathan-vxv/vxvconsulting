@@ -15,7 +15,7 @@ A separate account (not the BRM dashboard's) keeps C&L's edit access apart from 
 
 ## 2. Test locally (read-only first, then writes)
 ```powershell
-npm install
+npm.cmd install
 copy .env.example .env
 ```
 Edit `.env`:
@@ -25,13 +25,13 @@ Edit `.env`:
   (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`).
 - `READ_ONLY=1`, `DEMO_DATA=0`.
 
-**Read-only run:** `npm run dev`, open http://localhost:8788, sign in with `order`.
+**Read-only run:** `npm.cmd run dev`, open http://localhost:8788, sign in with `order`.
 Check the starting balance, incoming payment, summary and every row against the sheet. Tap ▲/▼: the label shows
 "Test mode: not saved" and the sheet does not change (in read-only mode the server asks Google only for read access, so
 it cannot write). In the browser dev tools (Network -> `order`), `wouldWrite` shows the exact B-E values it would have written.
 
 **Writes:** File -> Make a copy of the sheet, share the copy with the service account as Editor, and set `SHEET_ID` in
-`.env` to the copy's id (from its URL). Set `READ_ONLY=0`, restart `npm run dev`. Move rows and check in the copy that:
+`.env` to the copy's id (from its URL). Set `READ_ONLY=0`, restart `npm.cmd run dev`. Move rows and check in the copy that:
 - the order changed and A, F and G still compute (Step, Running Balance, Check);
 - the "Pending client payment" row's Date and Amount are still `=C5` and `=C4` wherever it moved;
 - editing a row in the sheet, then tapping a move on the open page, gives "The sheet was changed by someone else…".
@@ -41,21 +41,21 @@ No credentials yet? `DEMO_DATA=1` runs the page on built-in sample rows.
 
 ## 3. Cloudflare Pages project (same Cloudflare account as the dashboard Worker)
 ```powershell
-npx wrangler login
-npx wrangler pages project create vxv-clbuilders --production-branch main
-npx wrangler kv namespace create clbuilders-rate-limit
+npx.cmd wrangler login
+npx.cmd wrangler pages project create vxv-clbuilders --production-branch main
+npx.cmd wrangler kv namespace create clbuilders-rate-limit
 ```
 Paste the printed KV `id` into `wrangler.toml` and uncomment the `[[kv_namespaces]]` block.
 Set the secrets (each command prompts for the value; for the key, pipe the file in):
 ```powershell
-Get-Content C:\path\to\key.json -Raw | npx wrangler pages secret put GOOGLE_SERVICE_ACCOUNT_JSON --project-name vxv-clbuilders
-npx wrangler pages secret put SHEET_ID --project-name vxv-clbuilders
-npx wrangler pages secret put SITE_PASSWORD --project-name vxv-clbuilders
-npx wrangler pages secret put SESSION_SECRET --project-name vxv-clbuilders
+Get-Content C:\path\to\key.json -Raw | npx.cmd wrangler pages secret put GOOGLE_SERVICE_ACCOUNT_JSON --project-name vxv-clbuilders
+npx.cmd wrangler pages secret put SHEET_ID --project-name vxv-clbuilders
+npx.cmd wrangler pages secret put SITE_PASSWORD --project-name vxv-clbuilders
+npx.cmd wrangler pages secret put SESSION_SECRET --project-name vxv-clbuilders
 ```
 Leave `READ_ONLY` and `DEMO_DATA` unset in production. Deploy:
 ```powershell
-npm run deploy
+npm.cmd run deploy
 ```
 Try it at https://vxv-clbuilders.pages.dev.
 
@@ -71,5 +71,5 @@ Merge branch `clbuilders-waterfall` into `main` and push. That adds `vxvconsulti
 the subdomain. The `_apps` folder is not published by GitHub Pages.
 
 ## Changing the password later
-`npx wrangler pages secret put SITE_PASSWORD --project-name vxv-clbuilders`, then `npm run deploy` (Pages applies
+`npx.cmd wrangler pages secret put SITE_PASSWORD --project-name vxv-clbuilders`, then `npm.cmd run deploy` (Pages applies
 changed secrets on the next deployment). Everyone currently signed in is signed out.
