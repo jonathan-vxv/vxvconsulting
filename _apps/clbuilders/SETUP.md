@@ -1,6 +1,7 @@
 # Setup: manual steps
 
-Commands run in PowerShell from this folder (`_apps\clbuilders`) unless noted.
+Commands run in PowerShell from this folder (`_apps\clbuilders`); `cd` there first. Use `npm.cmd` / `npx.cmd`:
+plain `npm` is blocked by PowerShell's default script policy.
 
 ## 1. Google service account
 1. https://console.cloud.google.com, signed in as jcrabtree.consulting@gmail.com (the sheet's owner). Use the
@@ -8,12 +9,10 @@ Commands run in PowerShell from this folder (`_apps\clbuilders`) unless noted.
 2. IAM & Admin -> Service Accounts -> Create service account, name `clbuilders-waterfall`. Skip the optional
    role and access steps.
 3. Open it -> Keys -> Add key -> Create new key -> JSON. A `.json` file downloads. Keep it private and out of the repo.
-4. In the sheet: Share -> paste the account's `client_email` (from the JSON) -> **Viewer** for the read-only test,
-   then **Editor** once writes are tested. Untick "Notify people".
+4. In the sheet: Share -> paste the account's `client_email` (from the JSON) -> **Viewer**. Untick "Notify people".
+   Viewer is all it needs: the page is a planner and never writes to the sheet (it only asks Google for read access).
 
-A separate account (not the BRM dashboard's) keeps C&L's edit access apart from the read-only BRM one.
-
-## 2. Test locally (read-only first, then writes)
+## 2. Test locally
 ```powershell
 npm.cmd install
 copy .env.example .env
@@ -23,19 +22,11 @@ Edit `.env`:
   `node -e "console.log(JSON.stringify(require('C:/path/to/key.json')))"`.
 - `SITE_PASSWORD=order`; `SESSION_SECRET=` 64 random characters
   (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`).
-- `READ_ONLY=1`, `DEMO_DATA=0`.
+- `DEMO_DATA=0`.
 
-**Read-only run:** `npm.cmd run dev`, open http://localhost:8788, sign in with `order`.
-Check the starting balance, incoming payment, summary and every row against the sheet. Tap ▲/▼: the label shows
-"Test mode: not saved" and the sheet does not change (in read-only mode the server asks Google only for read access, so
-it cannot write). In the browser dev tools (Network -> `order`), `wouldWrite` shows the exact B-E values it would have written.
-
-**Writes:** File -> Make a copy of the sheet, share the copy with the service account as Editor, and set `SHEET_ID` in
-`.env` to the copy's id (from its URL). Set `READ_ONLY=0`, restart `npm.cmd run dev`. Move rows and check in the copy that:
-- the order changed and A, F and G still compute (Step, Running Balance, Check);
-- the "Pending client payment" row's Date and Amount are still `=C5` and `=C4` wherever it moved;
-- editing a row in the sheet, then tapping a move on the open page, gives "The sheet was changed by someone else…".
-Then put the real `SHEET_ID` back.
+Run `npm.cmd run dev`, open http://localhost:8788 and sign in with `order`. Check the starting balance, incoming
+payment, summary and every row against the sheet, then try a few moves and watch the chart. Wrangler reads `.env`
+only when it starts, so after editing `.env` restart it (Ctrl+C, then `npm.cmd run dev`).
 
 No credentials yet? `DEMO_DATA=1` runs the page on built-in sample rows.
 
@@ -53,7 +44,7 @@ npx.cmd wrangler pages secret put SHEET_ID --project-name vxv-clbuilders
 npx.cmd wrangler pages secret put SITE_PASSWORD --project-name vxv-clbuilders
 npx.cmd wrangler pages secret put SESSION_SECRET --project-name vxv-clbuilders
 ```
-Leave `READ_ONLY` and `DEMO_DATA` unset in production. Deploy:
+Leave `DEMO_DATA` unset in production. Deploy:
 ```powershell
 npm.cmd run deploy
 ```

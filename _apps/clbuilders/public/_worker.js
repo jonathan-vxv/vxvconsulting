@@ -6,14 +6,14 @@
 //   POST /login       form field "password" -> session cookie
 //   POST /logout      clears the cookie
 //   GET  /api/data    inputs + rows + version (signed in only)
-//   POST /api/order   {version, order:[old row indexes in new order]} -> re-reads the sheet, refuses with
-//                     409 if it changed since `version`, else rewrites B9:E48 and returns the fresh data
+//
+// Read-only: the page is a scenario planner. Reordering happens in the browser and never reaches the sheet.
 //
 // Settings are environment variables; see ../.env.example.
 
 import { configError, passwordMatches, createSession, clearSessionCookie, hasSession, isLocked, recordFail, clearFails } from '../src/auth.js';
 import { getStore } from '../src/google.js';
-import { parseRows, parseInputs, headersOk, versionOf, isPermutation, buildWrite } from '../src/sheet.js';
+import { parseRows, parseInputs, headersOk, versionOf } from '../src/sheet.js';
 
 const SECURITY_HEADERS = {
   'X-Robots-Tag': 'noindex, nofollow, noarchive',
@@ -42,7 +42,7 @@ async function loginPage(env, req, message = '', status = message ? 401 : 200) {
   return respond(text.replace('<!--ERR-->', safe), status, 'text/html; charset=utf-8');
 }
 
-// Reads the sheet and shapes it for the page. `rows` keeps each row's raw cells for rewriting.
+// Reads the sheet and shapes it for the page.
 async function load(store) {
   const sheet = await store.read();
   if (!headersOk(sheet.headers)) {
@@ -60,7 +60,6 @@ const publicData = ({ rows, inputs, version }, store) => ({
   version,
   inputs,
   rows: rows.map(({ project, vendor, date, amount, incoming }) => ({ project, vendor, date, amount, incoming })),
-  readOnly: !!store.readOnly,
   demo: !!store.demo,
   fetchedAt: new Date().toISOString(),
 });
@@ -68,7 +67,7 @@ const publicData = ({ rows, inputs, version }, store) => ({
 function sheetError(e) {
   console.log('sheet error', String(e && e.message));
   if (e && e.code === 'layout')
-    return json({ error: 'The sheet layout changed (row 8 should read Project, Vendor, Date, Amount in B-E). Nothing was saved.' }, 502);
+    return json({ error: 'The sheet layout changed (row 8 should read Project, Vendor, Date, Amount in B-E).' }, 502);
   return json({ error: 'Could not reach the Google Sheet. Try again in a moment.' }, 502);
 }
 
@@ -143,35 +142,6 @@ export default {
         }
       }
 
-      if (path === '/api/order' && method === 'POST') {
-        let body;
-        try {
-          body = await req.json();
-        } catch {
-          return json({ error: 'bad request' }, 400);
-        }
-        let current;
-        try {
-          current = await load(store); // re-read right before writing
-        } catch (e) {
-          return sheetError(e);
-        }
-        if (typeof body?.version !== 'string' || body.version !== current.version)
-          return json({ error: 'The sheet changed since this page loaded.', conflict: true, data: publicData(current, store) }, 409);
-        if (!isPermutation(body.order, current.rows.length)) return json({ error: 'bad order' }, 400);
-
-        const grid = buildWrite(current.rows, body.order);
-        if (store.readOnly) {
-          // Dry run: report what would have been written, change nothing.
-          return json({ ok: true, dryRun: true, wouldWrite: grid.slice(0, current.rows.length), data: publicData(current, store) });
-        }
-        try {
-          await store.write(grid);
-          return json({ ok: true, data: publicData(await load(store), store) });
-        } catch (e) {
-          return sheetError(e);
-        }
-      }
       return json({ error: 'not found' }, 404);
     }
 

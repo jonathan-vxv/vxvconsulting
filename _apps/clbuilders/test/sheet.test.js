@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRows, parseInputs, buildWrite, isPermutation, summarize, headersOk, versionOf, ROW_COUNT } from '../src/sheet.js';
+import { parseRows, parseInputs, summarize, headersOk, versionOf } from '../src/sheet.js';
 import { passwordMatches, createSession, hasSession, isLocked, recordFail, clearFails, configError } from '../src/auth.js';
 
 const formulas = [
@@ -16,33 +16,13 @@ const values = [
   ['Kinports', 'Vendor B', '11/20/2026', -50.25],
 ];
 
-test('parseRows skips blanks, keeps formulas in raw and flags the incoming row', () => {
+test('parseRows skips blanks and flags the incoming row', () => {
   const rows = parseRows(formulas, values);
   assert.equal(rows.length, 3);
   assert.equal(rows[1].incoming, true);
   assert.equal(rows[1].amount, 300);
-  assert.deepEqual(rows[1].raw, ['', 'Pending client payment', '=C5', '=$C$4']);
+  assert.equal(rows[1].date, '11/30/2026');
   assert.equal(rows[0].incoming, false);
-});
-
-test('buildWrite reorders B-E, keeps formulas, pads to 40 rows and protects number-like text', () => {
-  const rows = parseRows(formulas, values);
-  rows[0].raw[0] = '2024'; // a project name that USER_ENTERED would turn into a number
-  const grid = buildWrite(rows, [1, 2, 0]);
-  assert.equal(grid.length, ROW_COUNT);
-  assert.ok(grid.every((r) => r.length === 4));
-  assert.deepEqual(grid[0], ['', 'Pending client payment', '=C5', '=$C$4']);
-  assert.deepEqual(grid[2], ["'2024", 'Vendor A - Inv 1', '', -100]);
-  assert.deepEqual(grid[3], ['', '', '', '']);
-});
-
-test('isPermutation', () => {
-  assert.ok(isPermutation([2, 0, 1], 3));
-  assert.ok(!isPermutation([0, 0, 1], 3));
-  assert.ok(!isPermutation([0, 1], 3));
-  assert.ok(!isPermutation([0, 1, 3], 3));
-  assert.ok(!isPermutation('012', 3));
-  assert.ok(!isPermutation([0, 1, 1.5], 3));
 });
 
 test('summary matches the sheet example', () => {

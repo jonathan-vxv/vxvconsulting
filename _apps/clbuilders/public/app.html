@@ -8,56 +8,88 @@
 <title>Payment Waterfall | C&amp;L Builders</title>
 <style>
   :root {
-    --bg: #faf9f5; --bg-alt: #f0eee6; --ink: #23221e; --ink-dim: #77746a;
-    --blue: #0071e3; --blue-dim: #0058b0; --line: #ddd9cc; --neg: #b3261e; --pos: #1e7a3c;
-    --neg-bg: #fdecea; --pos-bg: #e6f4ea; --card: #fff;
+    --bg: #faf9f5; --bg-alt: #f0eee6; --ink: #23221e; --ink-dim: #77746a; --ink-faint: #a8a59a;
+    --blue: #0071e3; --blue-dim: #0058b0; --line: #ddd9cc; --grid: #ebe8de; --neg: #b3261e; --pos: #1e7a3c;
+    --neg-bg: #fdecea; --pos-bg: #e6f4ea; --card: #fff; --ref: #8f8b80;
     color-scheme: light;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.4; -webkit-font-smoothing: antialiased;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif; }
-  .wrap { max-width: 720px; margin: 0 auto; padding: 0 16px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
   header { border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; background: var(--bg); }
   header .wrap { display: flex; align-items: center; justify-content: space-between; height: 52px; gap: 12px; }
   .brand { font-weight: 600; font-size: .95rem; color: var(--ink); text-decoration: none; white-space: nowrap; }
   button { font: inherit; cursor: pointer; }
   .link { background: none; border: 0; color: var(--blue); font-size: .85rem; padding: 8px 0; }
+  .link:disabled { color: var(--ink-faint); cursor: default; }
   .status { font-size: .8rem; font-weight: 600; padding: 5px 12px; border-radius: 980px; background: var(--bg-alt); color: var(--ink-dim); white-space: nowrap; }
-  .status.saving { background: #e8f0fb; color: var(--blue-dim); }
-  .status.saved { background: var(--pos-bg); color: var(--pos); }
+  .status.changed { background: #e8f0fb; color: var(--blue-dim); }
   .status.error { background: var(--neg-bg); color: var(--neg); }
-  .status.dry { background: #fff4d6; color: #7a5a00; }
 
   main { padding: 20px 0 60px; }
   h1 { font-size: 1.6rem; letter-spacing: -.02em; margin: 0; }
-  .meta { color: var(--ink-dim); font-size: .8rem; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 2px 0 16px; }
-  .banner { border-radius: 12px; padding: 10px 14px; font-size: .88rem; font-weight: 600; margin-bottom: 14px; }
-  .banner.err { background: var(--neg-bg); color: var(--neg); }
-  .banner.info { background: #fff4d6; color: #7a5a00; }
+  .meta { color: var(--ink-dim); font-size: .8rem; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 2px 0 14px; }
+  .banner { border-radius: 12px; padding: 10px 14px; font-size: .85rem; margin-bottom: 14px; background: var(--bg-alt); color: var(--ink-dim); }
+  .banner b { color: var(--ink); }
+  .banner.err { background: var(--neg-bg); color: var(--neg); font-weight: 600; }
 
-  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 22px; }
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; }
   @media (min-width: 640px) { .tiles { grid-template-columns: repeat(3, 1fr); } }
+  @media (min-width: 1000px) { .tiles { grid-template-columns: repeat(6, 1fr); } }
   .tile { background: var(--bg-alt); border-radius: 16px; padding: 12px 14px; min-width: 0; }
   .tile .l { font-size: .68rem; font-weight: 600; letter-spacing: .05em; color: var(--ink-dim); text-transform: uppercase; }
   .tile .v { font-size: 1.3rem; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
   .tile .n { font-size: .75rem; color: var(--ink-dim); }
+  .tile .n .was { white-space: nowrap; }
   .tile.state { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
   .tile.state .l { display: none; }
   .tile.ok { background: var(--pos-bg); } .tile.ok .v { color: var(--pos); }
   .tile.short { background: var(--neg-bg); } .tile.short .v { color: var(--neg); }
   .neg { color: var(--neg); } .pos { color: var(--pos); }
+  .better { color: var(--pos); font-weight: 600; } .worse { color: var(--neg); font-weight: 600; }
 
+  /* List and chart: stacked on a phone (chart first), side by side on a wide screen with the chart pinned. */
+  .split { display: flex; flex-direction: column; gap: 18px; }
+  .chart-col { order: -1; }
+  @media (min-width: 900px) {
+    .split { display: grid; grid-template-columns: minmax(340px, 1fr) minmax(0, 1.25fr); gap: 24px; align-items: start; }
+    .chart-col { order: 0; position: sticky; top: 68px; }
+  }
   h2 { font-size: .72rem; font-weight: 600; letter-spacing: .06em; color: var(--ink-dim); margin: 0 0 8px; text-transform: uppercase; }
+  .listhead { display: flex; justify-content: space-between; align-items: baseline; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 14px 10px; }
+  .chart-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .legend { display: flex; gap: 14px; font-size: .75rem; color: var(--ink-dim); flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend span[hidden] { display: none; }
+  .legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--blue); }
+  .legend i.ref { border-top: 2px dashed var(--ref); }
+  .legend i.zone { height: 10px; border: 0; background: var(--neg-bg); border-radius: 2px; }
+  #chart { position: relative; margin-top: 6px; touch-action: pan-y; }
+  #chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  #chart text { font-family: inherit; font-size: 11px; fill: var(--ink-dim); font-variant-numeric: tabular-nums; }
+  #chart .lbl { fill: var(--ink); font-weight: 600; }
+  #tip { position: absolute; z-index: 3; pointer-events: none; background: var(--ink); color: #fff; font-size: .78rem; line-height: 1.35;
+    padding: 7px 10px; border-radius: 8px; white-space: nowrap; display: none; }
+  #tip .t { font-weight: 700; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+  #tip .r { display: flex; justify-content: space-between; gap: 14px; font-variant-numeric: tabular-nums; }
+  #tip .r span:first-child { color: #c9c6bb; }
+  .chart-note { font-size: .75rem; color: var(--ink-dim); margin: 6px 2px 0; }
+
   ol { list-style: none; margin: 0; padding: 0; }
   .item { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; background: var(--card);
     border: 1px solid var(--line); border-radius: 14px; padding: 10px 10px 10px 12px; margin-bottom: 8px; transition: background-color .4s; }
   .item.short { background: var(--neg-bg); border-color: #f2c4bf; }
   .item.in { background: var(--pos-bg); border-color: #b9dfc4; }
   .item.flash { box-shadow: 0 0 0 2px var(--blue); }
+  .item.hot { border-color: var(--ink); }
   .step { font-size: .8rem; font-weight: 700; color: var(--ink-dim); text-align: center; font-variant-numeric: tabular-nums; }
   .body { min-width: 0; }
   .vendor { font-weight: 600; font-size: .95rem; overflow-wrap: anywhere; }
   .proj { font-size: .78rem; color: var(--ink-dim); }
+  .moved { font-size: .7rem; font-weight: 600; color: var(--blue-dim); background: #e8f0fb; border-radius: 6px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
   .nums { display: flex; gap: 12px; font-size: .85rem; margin-top: 3px; font-variant-numeric: tabular-nums; flex-wrap: wrap; }
   .nums .bal { color: var(--ink-dim); }
   .nums .bal b { font-weight: 600; color: var(--ink); }
@@ -81,13 +113,31 @@
 <main><div class="wrap">
   <h1>Payment waterfall</h1>
   <div class="meta"><span id="updated"></span><button class="link" id="refresh" type="button">Reload from sheet</button></div>
-  <div id="banner" class="banner" hidden></div>
+  <div id="banner" class="banner"><b>Planner only.</b> Try different payment orders here; nothing you do changes the Google Sheet.</div>
   <div id="loading">Loading the sheet…</div>
   <div id="content" hidden>
     <div class="tiles" id="tiles"></div>
-    <h2>Payment order</h2>
-    <ol id="list"></ol>
-    <p class="foot">Use ▲ ▼ to change the order. Each move saves to the Google Sheet. Amounts are edited in the sheet itself.</p>
+    <div class="split">
+      <section>
+        <div class="listhead"><h2>Payment order</h2><button class="link" id="reset" type="button" disabled>Reset to sheet order</button></div>
+        <ol id="list"></ol>
+      </section>
+      <section class="chart-col">
+        <div class="card">
+          <div class="chart-top">
+            <h2>Bank balance after each payment</h2>
+            <div class="legend" id="legend">
+              <span><i></i>This order</span>
+              <span id="legend-ref"><i class="ref"></i>Sheet order</span>
+              <span><i class="zone"></i>Below $0</span>
+            </div>
+          </div>
+          <div id="chart" role="img" aria-label="Line chart of the bank balance after each payment step"><div id="tip"></div></div>
+          <p class="chart-note" id="chart-note"></p>
+        </div>
+      </section>
+    </div>
+    <p class="foot">Use ▲ ▼ to try a different order. The list above is the chart's data, step by step. Amounts come from the Google Sheet.</p>
   </div>
 </div></main>
 <script src="/app.js"></script>

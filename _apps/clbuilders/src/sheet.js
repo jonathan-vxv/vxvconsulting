@@ -1,11 +1,11 @@
-// Layout of the "Payment Waterfall" tab and the pure logic for reading and reordering it.
+// Layout of the "Payment Waterfall" tab and the pure logic for reading it. The app never writes to the sheet.
 // Nothing here talks to Google; see google.js for that. Tested in test/sheet.test.js.
 //
 // Layout (confirmed against the sheet on 2026-11-18):
 //   C3 starting bank balance, C4 incoming payment amount, C5 expected date of incoming payment
 //   F2:G6 summary formulas (the page recomputes these from the rows, so they are not read)
 //   Row 8 headers: A Step | B Project | C Vendor | D Date | E Amount | F Running Balance | G Check
-//   Rows 9-48 data. Only B-E are inputs; A, F and G are formulas and are never written.
+//   Rows 9-48 data (B-E are read; A, F and G are formulas the page recomputes).
 //   A49 onward holds the "How to use" notes, which are outside every range used here.
 
 export const TAB = 'Payment Waterfall';
@@ -49,7 +49,7 @@ export function toNumber(v) {
 
 // formulas: B9:E48 read with valueRenderOption=FORMULA (formulas as "=C4", plain values as typed).
 // values:   B9:E48 read with UNFORMATTED_VALUE (what the formulas evaluate to).
-// Returns the non-blank rows in sheet order. `raw` is kept server-side only for the rewrite.
+// Returns the non-blank rows in sheet order.
 export function parseRows(formulas, values) {
   const f = padGrid(formulas), v = padGrid(values);
   const rows = [];
@@ -63,7 +63,6 @@ export function parseRows(formulas, values) {
       date: String(v[r][2] ?? ''),
       amount,
       incoming: refsIncoming || /pending client payment/i.test(String(v[r][1] ?? '')),
-      raw: f[r],
     });
   }
   return rows;
@@ -74,42 +73,12 @@ export function parseInputs(values) {
   return { startingBalance: toNumber(col[0]), incomingAmount: toNumber(col[1]), incomingDate: String(col[2] ?? '') };
 }
 
-// Fingerprint of the input cells the page depends on. Any edit to the rows (or C3:C5) changes it.
+// Fingerprint of the cells the page shows. Any edit to the rows (or C3:C5) changes it; the page uses it
+// to keep a scenario across reloads only while the sheet is unchanged.
 export async function versionOf(formulas, inputs) {
   const data = new TextEncoder().encode(JSON.stringify([padGrid(formulas), inputs]));
   const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', data));
   return Array.from(hash.slice(0, 16), (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-// True when `order` is a permutation of 0..n-1.
-export function isPermutation(order, n) {
-  if (!Array.isArray(order) || order.length !== n) return false;
-  const seen = new Set();
-  for (const i of order) {
-    if (!Number.isInteger(i) || i < 0 || i >= n || seen.has(i)) return false;
-    seen.add(i);
-  }
-  return true;
-}
-
-// Text in Project/Vendor that USER_ENTERED would turn into a number, date or boolean gets a leading
-// apostrophe so it stays text. Formulas ("=...") pass through so they stay formulas.
-function safeText(v) {
-  if (typeof v !== 'string' || v === '' || v.startsWith('=')) return v;
-  if (/^[\s\d.,$%()+\-\/:]+$/.test(v) || /^(true|false)$/i.test(v) || v.startsWith("'")) return `'${v}`;
-  return v;
-}
-
-// The 40x4 block to write to B9:E48 with valueInputOption=USER_ENTERED: the rows in the new order,
-// then blanks to clear whatever was below. Date (D) and Amount (E) are written exactly as read with
-// FORMULA rendering (dates as formatted strings), so formulas such as =C5 and =C4 survive the move.
-export function buildWrite(rows, order) {
-  const out = order.map((i) => {
-    const [b, c, d, e] = rows[i].raw;
-    return [safeText(b), safeText(c), d, e];
-  });
-  while (out.length < ROW_COUNT) out.push(['', '', '', '']);
-  return out;
 }
 
 // Summary the page shows; mirrors the sheet's F2:G6 formulas.

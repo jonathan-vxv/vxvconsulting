@@ -1,5 +1,6 @@
-// Google Sheets access with a service account (JWT -> OAuth token), plus an in-memory demo store.
-// Both stores expose: read() -> {formulas, values, inputs, headers} and write(grid).
+// Read-only Google Sheets access with a service account (JWT -> OAuth token), plus a demo store.
+// Both stores expose read() -> {formulas, values, inputs, headers}. Nothing here can write: the token
+// only ever asks for the spreadsheets.readonly scope.
 
 import { RANGES } from './sheet.js';
 
@@ -36,9 +37,7 @@ async function googleToken(env, scope) {
 }
 
 function sheetsStore(env) {
-  const readOnly = env.READ_ONLY === '1' || env.READ_ONLY === 'true';
-  // In read-only mode the token itself can't write, so a bug can't touch the sheet.
-  const scope = readOnly ? 'https://www.googleapis.com/auth/spreadsheets.readonly' : 'https://www.googleapis.com/auth/spreadsheets';
+  const scope = 'https://www.googleapis.com/auth/spreadsheets.readonly';
   const base = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(env.SHEET_ID)}`;
 
   async function batchGet(token, ranges, valueRender) {
@@ -50,7 +49,6 @@ function sheetsStore(env) {
   }
 
   return {
-    readOnly,
     async read() {
       const token = await googleToken(env, scope);
       const [[formulas], [inputs, headers, values]] = await Promise.all([
@@ -59,23 +57,12 @@ function sheetsStore(env) {
       ]);
       return { formulas, values, inputs, headers: headers[0] || [] };
     },
-    async write(grid) {
-      if (readOnly) throw new Error('read-only');
-      const token = await googleToken(env, scope);
-      const url = `${base}/values/${encodeURIComponent(RANGES.rows)}?valueInputOption=USER_ENTERED`;
-      const res = await fetch(url, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ range: RANGES.rows, majorDimension: 'ROWS', values: grid }),
-      });
-      if (!res.ok) throw new Error(`sheets write ${res.status}`);
-    },
   };
 }
 
-// DEMO_DATA=1: fake rows held in memory (per isolate), for trying the page without Google credentials.
+// DEMO_DATA=1: fake rows, for trying the page without Google credentials.
 // The formulas mimic the real sheet: the incoming row's Date and Amount are =C5 and =C4.
-const demo = {
+const demo = Object.freeze({
   inputs: [[150000], [200000], ['11/30/2026']],
   formulas: [
     ['Project A', 'Sample Vendor 1 - Inv 101', '', -95000],
@@ -88,11 +75,10 @@ const demo = {
     ['', 'Pending client payment', '=C5', '=C4'],
     ['Project C', 'Sample Vendor 8', '', -25500],
   ],
-};
+});
 function demoStore() {
   const evalCell = (v) => (v === '=C4' ? demo.inputs[1][0] : v === '=C5' ? demo.inputs[2][0] : v);
   return {
-    readOnly: false,
     demo: true,
     async read() {
       return {
@@ -101,9 +87,6 @@ function demoStore() {
         inputs: demo.inputs,
         headers: ['Project', 'Vendor', 'Date', 'Amount'],
       };
-    },
-    async write(grid) {
-      demo.formulas = grid.filter((r) => r.some((v) => v !== '')).map((r) => r.map((v) => (typeof v === 'string' && v.startsWith("'") ? v.slice(1) : v)));
     },
   };
 }
