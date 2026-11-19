@@ -20,6 +20,7 @@
   // base: the sheet as read (rows in sheet order). order: indexes into base.rows in the order being tried.
   let base = null, order = [], lastLoad = 0, flashIdx = null, hoverStep = null;
   const isIdentity = (o) => o.every((v, i) => v === i);
+  const phone = matchMedia('(max-width: 899px)'); // keep in step with the CSS breakpoint
   const sameDollars = (p, q) => Math.round(p) === Math.round(q); // amounts carry cents; compare whole dollars
   const timeNow = () => new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   const keyFor = (b) => `clb_order:${b.version}`;
@@ -135,14 +136,15 @@
   function drawChart(rows, s, ref, changed) {
     const box = $('chart');
     const W = Math.max(280, Math.round(box.clientWidth || 600));
-    const H = W < 500 ? 220 : 300;
-    const pad = { l: 58, r: 14, t: 26, b: 26 };
+    const pinned = phone.matches; // on a phone the chart is pinned, so keep it short
+    const H = pinned ? (W < 500 ? 150 : 190) : 300;
+    const pad = { l: 58, r: 14, t: pinned ? 20 : 26, b: 22 };
     const n = rows.length;
     const start = base.inputs.startingBalance;
     const mine = [start, ...s.running], sheet = [start, ...ref.running];
     const all = changed ? mine.concat(sheet) : mine;
     let lo = Math.min(0, ...all), hi = Math.max(0, ...all);
-    const ticks = niceTicks(lo, hi, W < 500 ? 4 : 5);
+    const ticks = niceTicks(lo, hi, pinned ? 3 : 5);
     lo = Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1]);
     const x = (i) => pad.l + (n ? (i / n) * (W - pad.l - pad.r) : 0);
     const y = (v) => pad.t + ((hi - v) / (hi - lo || 1)) * (H - pad.t - pad.b);
@@ -169,7 +171,7 @@
       const ix = x(inc + 1);
       svg.append(sv('line', { x1: ix, x2: ix, y1: pad.t - 4, y2: H - pad.b, stroke: 'var(--ink-faint)', 'stroke-dasharray': '2 3', 'stroke-width': 1 }));
       const right = ix < W * 0.6;
-      svg.append(sv('text', { x: ix + (right ? 5 : -5), y: pad.t - 10, 'text-anchor': right ? 'start' : 'end' }, 'Client payment in'));
+      svg.append(sv('text', { x: ix + (right ? 5 : -5), y: pad.t - 8, 'text-anchor': right ? 'start' : 'end' }, 'Client payment in'));
     }
 
     const path = (vals) => vals.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
@@ -247,8 +249,18 @@
     flashIdx = order[to];
     store.set(keyFor(base), isIdentity(order) ? null : order);
     render();
-    const li = $('list').children[to];
-    if (li && li.scrollIntoView) li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    keepInView($('list').children[to]);
+  }
+
+  // Scroll just enough that the moved row is visible below the header (and the pinned chart on a phone).
+  function keepInView(li) {
+    if (!li) return;
+    const covered = phone.matches ? document.querySelector('.chart-col').getBoundingClientRect().bottom : document.querySelector('header').getBoundingClientRect().bottom;
+    const r = li.getBoundingClientRect(), gap = 8;
+    let dy = 0;
+    if (r.top < covered + gap) dy = r.top - covered - gap;
+    else if (r.bottom > innerHeight - gap) dy = Math.min(r.bottom - innerHeight + gap, r.top - covered - gap);
+    if (dy) window.scrollBy({ top: dy, behavior: 'smooth' });
   }
 
   function adopt(data) {

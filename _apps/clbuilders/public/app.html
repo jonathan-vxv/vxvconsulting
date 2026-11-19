@@ -52,6 +52,14 @@
   /* List and chart: stacked on a phone (chart first), side by side on a wide screen with the chart pinned. */
   .split { display: flex; flex-direction: column; gap: 18px; }
   .chart-col { order: -1; }
+  /* Phone: the chart stays pinned under the header while the list scrolls beneath it. */
+  @media (max-width: 899px) {
+    .chart-col { position: sticky; top: 52px; z-index: 4; background: var(--bg); padding: 8px 0; margin: -8px 0; }
+    .chart-col .card { padding: 10px 10px 6px; box-shadow: 0 6px 14px -8px rgba(35, 34, 30, .25); }
+    .chart-col h2 { font-size: .66rem; margin-bottom: 2px; }
+    .legend { font-size: .7rem; gap: 10px; }
+    .chart-note { font-size: .7rem; margin-top: 2px; }
+  }
   @media (min-width: 900px) {
     .split { display: grid; grid-template-columns: minmax(340px, 1fr) minmax(0, 1.25fr); gap: 24px; align-items: start; }
     .chart-col { order: 0; position: sticky; top: 68px; }
