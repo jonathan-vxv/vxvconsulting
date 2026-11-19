@@ -87,8 +87,18 @@
   .chart-note { font-size: .75rem; color: var(--ink-dim); margin: 6px 2px 0; }
 
   ol { list-style: none; margin: 0; padding: 0; }
-  .item { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; background: var(--card);
+  .item { display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: center; background: var(--card);
     border: 1px solid var(--line); border-radius: 14px; padding: 10px 10px 10px 12px; margin-bottom: 8px; transition: background-color .4s; }
+  /* Drag handle: the whole left strip of a tile (full height), so it's easy to grab on a phone. */
+  .handle { align-self: stretch; margin: -10px 0 -10px -12px; padding: 10px 0 10px 12px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 5px; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+    border-radius: 14px 0 0 14px; }
+  .handle .grip { fill: var(--ink-faint); }
+  .handle:hover .grip { fill: var(--ink-dim); }
+  .item.dragging { position: relative; z-index: 3; cursor: grabbing; box-shadow: 0 12px 28px -10px rgba(35, 34, 30, .4); border-color: var(--blue); }
+  .item.dragging .handle .grip { fill: var(--blue); }
+  body.is-dragging { cursor: grabbing; user-select: none; -webkit-user-select: none; }
+  body.is-dragging .item:not(.dragging) { transition: transform .15s ease, background-color .4s; }
   .item.short { background: var(--neg-bg); border-color: #f2c4bf; }
   .item.in { background: var(--pos-bg); border-color: #b9dfc4; }
   .item.flash { box-shadow: 0 0 0 2px var(--blue); }
@@ -145,7 +155,7 @@
         </div>
       </section>
     </div>
-    <p class="foot">Use ▲ ▼ to try a different order. The list above is the chart's data, step by step. Amounts come from the Google Sheet.</p>
+    <p class="foot">Drag a payment by the dots on its left, or use ▲ ▼, to try a different order. The list above is the chart's data, step by step. Amounts come from the Google Sheet.</p>
   </div>
 </div></main>
 <script src="/app.js"></script>

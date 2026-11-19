@@ -63,6 +63,7 @@
   }
 
   function render() {
+    if (drag) endDrag(false); // a reload or resize mid-drag rebuilds the list, so drop the drag first
     const { inputs } = base;
     const rows = order.map((i) => base.rows[i]);
     const s = summarize(inputs.startingBalance, rows.map((r) => r.amount));
@@ -116,12 +117,120 @@
       down.onclick = () => move(pos, 1);
       moves.append(up, down);
 
-      li.append(el('div', 'step', String(pos + 1)), body, moves);
+      // Drag handle: six-dot grip above the step number. The arrows stay the keyboard/one-step way.
+      const handle = el('div', 'handle');
+      handle.title = 'Drag to move';
+      handle.setAttribute('aria-hidden', 'true');
+      const grip = sv('svg', { viewBox: '0 0 8 14', width: 8, height: 14, class: 'grip' });
+      for (const [cx, cy] of [[2, 2], [6, 2], [2, 7], [6, 7], [2, 12], [6, 12]]) grip.append(sv('circle', { cx, cy, r: 1.4 }));
+      handle.append(grip, el('span', 'step', String(pos + 1)));
+      handle.addEventListener('pointerdown', (e) => startDrag(e, pos, li, handle));
+
+      li.append(handle, body, moves);
       return li;
     }));
 
     drawChart(rows, s, ref, changed);
   }
+
+  // Chart (and its note) for any order, without rebuilding the list. Used for the live preview while dragging.
+  function chartFor(ord) {
+    const start = base.inputs.startingBalance;
+    const rows = ord.map((i) => base.rows[i]);
+    drawChart(rows, summarize(start, rows.map((r) => r.amount)), summarize(start, base.rows.map((r) => r.amount)), !isIdentity(ord));
+  }
+  const movedTo = (o, from, to) => { const c = o.slice(); const [x] = c.splice(from, 1); c.splice(to, 0, x); return c; };
+
+  // ---------- drag and drop (Pointer Events: mouse, touch and pen) ----------
+  let drag = null;
+
+  function startDrag(e, from, li, handle) {
+    if (drag || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    e.preventDefault();
+    const items = [...$('list').children];
+    drag = {
+      from, to: from, li, handle, items, started: false, timer: 0,
+      startY: e.clientY, startScroll: scrollY, lastY: e.clientY,
+      centers: items.map((it) => { const r = it.getBoundingClientRect(); return r.top + scrollY + r.height / 2; }),
+      shift: li.getBoundingClientRect().height + 8, // tile height + the gap between tiles
+    };
+    try { handle.setPointerCapture(e.pointerId); } catch {}
+    handle.addEventListener('pointermove', onDragMove);
+    handle.addEventListener('pointerup', onDragUp);
+    handle.addEventListener('pointercancel', onDragCancel);
+    document.addEventListener('keydown', onDragKey);
+  }
+
+  function onDragMove(e) {
+    if (!drag) return;
+    drag.lastY = e.clientY;
+    if (!drag.started) {
+      if (Math.abs(e.clientY - drag.startY) < 4) return; // a tap on the handle isn't a drag
+      drag.started = true;
+      drag.li.classList.add('dragging');
+      document.body.classList.add('is-dragging');
+      drag.timer = setInterval(autoScroll, 16); // a timer rather than animation frames, so it never stalls
+    }
+    updateDrag();
+  }
+
+  // Moves the dragged tile with the pointer, opens a gap where it would land, and previews the chart.
+  function updateDrag() {
+    const d = drag;
+    const dy = d.lastY + scrollY - d.startY - d.startScroll;
+    d.li.style.transform = `translateY(${dy}px)`;
+    const center = d.centers[d.from] + dy;
+    let to = 0;
+    d.centers.forEach((c, j) => { if (j !== d.from && c < center) to++; });
+    d.items.forEach((it, j) => {
+      if (j === d.from) return;
+      const t = d.from < to && j > d.from && j <= to ? -d.shift : to < d.from && j >= to && j < d.from ? d.shift : 0;
+      it.style.transform = t ? `translateY(${t}px)` : '';
+    });
+    if (to !== d.to) { d.to = to; chartFor(movedTo(order, d.from, to)); }
+  }
+
+  // Near the top (below the header, or the pinned chart on a phone) or bottom edge, scroll the page.
+  function autoScroll() {
+    if (!drag) return;
+    const top = (phone.matches ? document.querySelector('.chart-col') : document.querySelector('header')).getBoundingClientRect().bottom;
+    const zone = 56, y = drag.lastY;
+    let v = 0;
+    if (y < top + zone) v = -Math.min(18, Math.ceil(((top + zone - y) / zone) * 12));
+    else if (y > innerHeight - zone) v = Math.min(18, Math.ceil(((y - (innerHeight - zone)) / zone) * 12));
+    if (v) {
+      const before = scrollY;
+      window.scrollBy(0, v);
+      if (scrollY !== before) updateDrag();
+    }
+  }
+
+  function endDrag(commit) {
+    const d = drag;
+    if (!d) return;
+    drag = null;
+    clearInterval(d.timer);
+    d.handle.removeEventListener('pointermove', onDragMove);
+    d.handle.removeEventListener('pointerup', onDragUp);
+    d.handle.removeEventListener('pointercancel', onDragCancel);
+    document.removeEventListener('keydown', onDragKey);
+    document.body.classList.remove('is-dragging');
+    d.li.classList.remove('dragging');
+    d.items.forEach((it) => { it.style.transform = ''; });
+    if (!d.started) return;
+    if (commit && d.to !== d.from) {
+      order = movedTo(order, d.from, d.to);
+      flashIdx = order[d.to];
+      store.set(keyFor(base), isIdentity(order) ? null : order);
+      render();
+      keepInView($('list').children[d.to]);
+    } else {
+      chartFor(order); // dropped where it started, or cancelled: put the chart back
+    }
+  }
+  const onDragUp = () => endDrag(true);
+  const onDragCancel = () => endDrag(false);
+  const onDragKey = (e) => { if (e.key === 'Escape') endDrag(false); };
 
   // ---------- chart ----------
   function niceTicks(lo, hi, count) {
