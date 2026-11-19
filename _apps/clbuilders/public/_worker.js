@@ -75,7 +75,7 @@ export default {
   async fetch(req, env) {
     const url = new URL(req.url);
     const path = url.pathname;
-    const method = req.method;
+    const method = req.method === 'HEAD' ? 'GET' : req.method; // the runtime drops the body for HEAD
 
     if (path === '/robots.txt') return respond('User-agent: *\nDisallow: /\n', 200, 'text/plain');
 
