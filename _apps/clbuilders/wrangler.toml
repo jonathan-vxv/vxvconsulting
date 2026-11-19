@@ -7,9 +7,8 @@ compatibility_date = "2025-01-01"
 # Secrets are NOT set here. Production: Cloudflare dashboard -> Workers & Pages -> vxv-clbuilders ->
 # Settings -> Variables and Secrets (or `npx wrangler pages secret put NAME`). Local: copy .env.example to .env.
 
-# Wrong-password counters shared across Cloudflare instances. Create with
-#   npx wrangler kv namespace create clbuilders-rate-limit
-# then paste the printed id below and uncomment. Without it, counting is per instance (weaker).
-# [[kv_namespaces]]
-# binding = "RATE_LIMIT"
-# id = "PASTE_ID_HERE"
+# Wrong-password counters shared across Cloudflare instances (created with
+# `npx.cmd wrangler kv namespace create clbuilders-rate-limit`). Without it, counting is per instance (weaker).
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "abd4389f9b92427288e465bcb7f3a90d"
